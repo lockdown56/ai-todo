@@ -1,0 +1,15 @@
+.env
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+server/.venv/
+desktop/node_modules/
+desktop/dist/
+desktop/*.tsbuildinfo
+desktop/vite.config.js
+desktop/vite.config.d.ts
+desktop/src-tauri/target/
+coverage/

@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Todo List — 原型</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --color-primary: #7B6FCF;
+  --color-primary-light: #F3F1FB;
+  --color-primary-dark: #6A5EB8;
+  --color-bg: #F5F4F2;
+  --color-surface: #FDFCFB;
+  --color-sidebar: #F3F2F0;
+  --color-border: #E8E6E3;
+  --color-text: #3D3A38;
+  --color-text-secondary: #6B6763;
+  --color-text-muted: #9E9A95;
+  --color-text-placeholder: #C4C0BB;
+  --color-priority-high: #D4784A;
+  --color-priority-mid: #D4A843;
+  --color-priority-low: #5B8CC9;
+  --color-danger: #D95550;
+  --color-tag-bg: #ECEAE6;
+  --color-input-bg: #F0EFEC;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 14px;
+  --shadow-card: 0 2px 16px rgba(0,0,0,0.05);
+  --sidebar-expanded: 250px;
+  --sidebar-collapsed: 60px;
+  --detail-width: 340px;
+  --transition-fast: 160ms ease-out;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== App Shell ===== */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-expanded) 1fr var(--detail-width);
+  height: 100vh;
+  transition: grid-template-columns var(--transition-fast);
+}
+.app.sidebar-collapsed {
+  grid-template-columns: var(--sidebar-collapsed) 1fr var(--detail-width);
+}
+.app.no-detail {
+  grid-template-columns: var(--sidebar-expanded) 1fr 0px;
+}
+.app.sidebar-collapsed.no-detail {
+  grid-template-columns: var(--sidebar-collapsed) 1fr 0px;
+}
+
+/* ===== Left Sidebar ===== */
+.sidebar {
+  background: var(--color-sidebar);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 14px;
+  overflow: hidden;
+}
+.sidebar-collapsed .sidebar { padding: 20px 10px; }
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 4px 6px;
+}
+.sidebar-collapsed .sidebar-header { justify-content: center; }
+
+.sidebar-logo {
+  width: 28px; height: 28px;
+  background: var(--color-primary);
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 14px; font-weight: 700;
+  flex-shrink: 0;
+}
+.sidebar-title {
+  font-size: 15px; font-weight: 600;
+  white-space: nowrap; overflow: hidden;
+}
+
+.sidebar-toggle {
+  margin-left: auto;
+  width: 28px; height: 28px;
+  border: none; background: none;
+  color: var(--color-text-muted);
+  cursor: pointer; font-size: 14px;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.sidebar-toggle:hover { background: var(--color-primary-light); color: var(--color-primary); }
+.sidebar-collapsed .sidebar-toggle { margin-left: 0; }
+
+/* Smart lists */
+.smart-lists { margin-bottom: 10px; }
+.smart-list-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: var(--radius-md);
+  cursor: pointer; font-size: 14px; color: var(--color-text-secondary);
+  transition: background var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap; overflow: hidden;
+  margin-bottom: 2px;
+}
+.smart-list-item:hover { background: #ECEAE8; }
+.smart-list-item.active {
+  background: var(--color-primary-light);
+  color: var(--color-primary); font-weight: 600;
+}
+.smart-list-item .icon { font-size: 15px; flex-shrink: 0; width: 20px; text-align: center; }
+.smart-list-item .count {
+  margin-left: auto; font-size: 11px;
+  background: #E6E4E0; color: var(--color-text-muted);
+  padding: 2px 8px; border-radius: var(--radius-pill);
+  white-space: nowrap; font-weight: 500;
+}
+.smart-list-item.active .count { background: #E5E1F5; color: var(--color-primary); }
+
+.sidebar-collapsed .smart-list-item { justify-content: center; padding: 12px 0; }
+.sidebar-collapsed .smart-list-item .count,
+.sidebar-collapsed .smart-list-item span:not(.icon) { display: none; }
+
+.sidebar-divider {
+  height: 1px; background: var(--color-border);
+  margin: 10px 2px;
+}
+
+/* Custom lists section */
+.lists-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 11px; color: var(--color-text-muted);
+  font-weight: 600; letter-spacing: 0.6px;
+  margin-bottom: 2px;
+}
+.sidebar-collapsed .lists-header { display: none; }
+.lists-header .add-list {
+  border: none; background: none;
+  color: var(--color-text-muted); cursor: pointer;
+  font-size: 16px; line-height: 1;
+  border-radius: var(--radius-sm);
+  padding: 0 3px;
+}
+.lists-header .add-list:hover { color: var(--color-primary); }
+
+.custom-list-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: var(--radius-md);
+  cursor: pointer; font-size: 14px; color: var(--color-text-secondary);
+  transition: background var(--transition-fast);
+  white-space: nowrap; overflow: hidden;
+  margin-bottom: 2px;
+}
+.custom-list-item:hover { background: #ECEAE8; }
+.custom-list-item.active { background: var(--color-primary-light); color: var(--color-primary); font-weight: 600; }
+.custom-list-item .dot {
+  width: 9px; height: 9px; border-radius: 3px;
+  flex-shrink: 0;
+}
+.sidebar-collapsed .custom-list-item { justify-content: center; padding: 12px 0; }
+.sidebar-collapsed .custom-list-item span:not(.dot) { display: none; }
+
+/* ===== Middle Column ===== */
+.middle {
+  display: flex; flex-direction: column;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.middle-header {
+  padding: 20px 24px 0;
+  flex-shrink: 0;
+}
+.middle-title-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.middle-title { font-size: 18px; font-weight: 600; }
+.middle-count { font-size: 13px; color: var(--color-text-muted); }
+
+/* Search */
+.search-wrap {
+  position: relative;
+  margin-bottom: 16px;
+}
+.search-wrap input {
+  width: 100%; padding: 9px 14px 9px 36px;
+  border: 1px solid transparent; border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  font-size: 14px; font-family: inherit;
+  outline: none; color: var(--color-text);
+  transition: border var(--transition-fast), background var(--transition-fast);
+}
+.search-wrap input:focus {
+  border-color: var(--color-primary);
+  background: var(--color-surface);
+}
+.search-wrap input::placeholder { color: var(--color-text-placeholder); }
+.search-wrap .search-icon {
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px; color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+/* Quick add */
+.quick-add {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border: 1px dashed #D5D3CF;
+  border-radius: var(--radius-md);
+  margin-bottom: 14px; cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.quick-add:hover { border-color: var(--color-primary); background: #FAF9F8; }
+.quick-add:focus-within { border-color: var(--color-primary); background: var(--color-surface); border-style: solid; }
+.quick-add .plus { color: var(--color-primary); font-size: 16px; font-weight: 600; flex-shrink: 0; }
+.quick-add input {
+  flex: 1; border: none; background: none;
+  font-size: 14px; font-family: inherit; outline: none;
+  color: var(--color-text);
+}
+.quick-add input::placeholder { color: var(--color-text-placeholder); }
+
+/* Sort bar */
+.sort-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.sort-bar .sort-label { color: var(--color-text-muted); }
+.sort-option {
+  padding: 4px 10px; border-radius: var(--radius-sm);
+  cursor: pointer; color: var(--color-text-secondary);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.sort-option:hover { background: var(--color-tag-bg); }
+.sort-option.active { background: var(--color-primary-light); color: var(--color-primary); font-weight: 600; }
+
+/* Task list */
+.task-list {
+  flex: 1; overflow-y: auto; padding: 0 24px 24px;
+}
+.task-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: var(--radius-md);
+  cursor: pointer; transition: background var(--transition-fast);
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+}
+.task-row:hover { background: #FAF9F8; }
+.task-row.active { background: var(--color-primary-light); border-color: #E8E4F6; }
+
+/* Checkbox */
+.cb {
+  width: 20px; height: 20px;
+  border: 2px solid #C8C5C0; border-radius: var(--radius-sm);
+  flex-shrink: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast);
+  font-size: 12px; color: transparent;
+}
+.cb:hover { border-color: var(--color-primary); }
+.cb.checked {
+  background: var(--color-primary); border-color: var(--color-primary);
+  color: #fff;
+}
+
+.task-info { flex: 1; min-width: 0; }
+.task-title { font-size: 14px; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-row.completed .task-title { color: var(--color-text-muted); text-decoration: line-through; }
+
+.task-meta {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.task-date { font-size: 12px; color: var(--color-priority-high); white-space: nowrap; }
+.task-row.completed .task-date { color: var(--color-text-muted); }
+.priority-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.tag-mini {
+  font-size: 11px; padding: 3px 8px;
+  background: var(--color-tag-bg); color: var(--color-text-secondary);
+  border-radius: var(--radius-pill); white-space: nowrap;
+}
+
+/* Empty state */
+.empty-state {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 80px 20px; text-align: center;
+}
+.empty-icon { font-size: 52px; margin-bottom: 16px; opacity: 0.25; }
+.empty-title { font-size: 15px; color: var(--color-text-muted); margin-bottom: 6px; }
+.empty-desc { font-size: 13px; color: var(--color-text-placeholder); }
+
+/* ===== Right Detail Panel ===== */
+.detail {
+  background: var(--color-surface);
+  padding: 24px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 18px;
+}
+.detail-empty {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; color: var(--color-text-placeholder);
+  font-size: 14px;
+}
+
+.detail-title-input {
+  width: 100%; border: 1px solid transparent;
+  background: var(--color-input-bg);
+  border-radius: var(--radius-md);
+  padding: 10px 14px; font-size: 16px; font-weight: 600;
+  font-family: inherit; color: var(--color-text);
+  outline: none;
+  transition: border var(--transition-fast), background var(--transition-fast);
+}
+.detail-title-input:focus { border-color: var(--color-primary); background: var(--color-surface); }
+
+.field-group { display: flex; flex-direction: column; gap: 5px; }
+.field-label {
+  font-size: 11px; color: var(--color-text-muted);
+  font-weight: 600; letter-spacing: 0.6px;
+  padding-left: 2px;
+}
+.field-value {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; background: var(--color-input-bg);
+  border-radius: var(--radius-md);
+  font-size: 14px; color: var(--color-text-secondary);
+  cursor: pointer; transition: background var(--transition-fast);
+}
+.field-value:hover { background: #E8E6E2; }
+
+.detail-desc {
+  width: 100%; border: 1px solid transparent;
+  background: var(--color-input-bg);
+  border-radius: var(--radius-md);
+  padding: 12px 14px; font-size: 14px; line-height: 1.6;
+  font-family: inherit; color: var(--color-text);
+  outline: none; resize: vertical;
+  min-height: 88px;
+  transition: border var(--transition-fast), background var(--transition-fast);
+}
+.detail-desc:focus { border-color: var(--color-primary); background: var(--color-surface); }
+.detail-desc::placeholder { color: var(--color-text-placeholder); }
+
+/* Tags display */
+.tags-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.tag-pill {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; padding: 4px 12px;
+  background: var(--color-tag-bg); color: var(--color-text-secondary);
+  border-radius: var(--radius-pill);
+}
+.tag-pill .tag-remove { cursor: pointer; font-size: 13px; color: var(--color-text-muted); }
+.tag-pill .tag-remove:hover { color: var(--color-danger); }
+
+/* Checklist */
+.checklist { display: flex; flex-direction: column; gap: 6px; }
+.checklist-item {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; color: var(--color-text-secondary);
+  padding: 5px 0;
+}
+.checklist-item .cb { width: 17px; height: 17px; font-size: 10px; }
+.checklist-item.done { color: var(--color-text-muted); text-decoration: line-through; }
+
+.add-checklist {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--color-text-muted);
+  cursor: pointer; padding: 6px 0;
+  transition: color var(--transition-fast);
+}
+.add-checklist:hover { color: var(--color-primary); }
+
+/* Detail actions */
+.detail-actions {
+  display: flex; gap: 10px;
+  padding-top: 12px; border-top: 1px solid var(--color-border);
+}
+.btn {
+  padding: 9px 18px; border-radius: var(--radius-md);
+  font-size: 13px; font-family: inherit; cursor: pointer;
+  border: none; transition: all var(--transition-fast);
+  font-weight: 500;
+}
+.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-primary:hover { background: var(--color-primary-dark); }
+.btn-secondary { background: var(--color-input-bg); color: var(--color-text-secondary); }
+.btn-secondary:hover { background: #E2E0DC; }
+.btn-danger { background: none; color: var(--color-danger); }
+.btn-danger:hover { background: #F9E8E7; }
+
+/* Save status */
+.save-status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--color-text-muted);
+  padding: 0 2px;
+}
+.save-status.saved { color: #68A87A; }
+.save-status.saving { color: var(--color-priority-mid); }
+.save-status.error { color: var(--color-danger); }
+
+/* ===== Error Overlay ===== */
+.error-overlay {
+  position: fixed; inset: 0;
+  background: var(--color-bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 100; gap: 20px;
+}
+.error-overlay.hidden { display: none; }
+.error-icon { font-size: 64px; opacity: 0.25; }
+.error-text { font-size: 17px; color: var(--color-text-secondary); }
+.error-sub { font-size: 14px; color: var(--color-text-muted); }
+
+/* ===== Confirm Dialog ===== */
+.dialog-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.2);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+}
+.dialog-overlay.hidden { display: none; }
+.dialog {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 28px; box-shadow: var(--shadow-card);
+  max-width: 400px; width: 90%;
+}
+.dialog h3 { font-size: 16px; margin-bottom: 10px; }
+.dialog p { font-size: 14px; color: var(--color-text-secondary); margin-bottom: 24px; line-height: 1.6; }
+.dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D5D2CF; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #BFBBB7; }
+</style>
+</head>
+<body>
+
+<!-- Error Overlay -->
+<div id="errorOverlay" class="error-overlay hidden">
+  <div class="error-icon">🔌</div>
+  <div class="error-text">无法连接到服务</div>
+  <div class="error-sub">请确认 API 服务已启动并运行在 http://127.0.0.1:8000</div>
+  <button class="btn btn-primary" onclick="toggleError()">重试连接</button>
+</div>
+
+<!-- Confirm Dialog -->
+<div id="confirmDialog" class="dialog-overlay hidden">
+  <div class="dialog">
+    <h3 id="dialogTitle">确认操作</h3>
+    <p id="dialogMsg"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" onclick="closeDialog()">取消</button>
+      <button class="btn btn-danger" id="dialogConfirmBtn" onclick="confirmDialog()">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- App -->
+<div class="app" id="app">
+
+  <!-- ===== LEFT SIDEBAR ===== -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">T</div>
+      <span class="sidebar-title">Todo List</span>
+      <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="收起侧栏" title="收起侧栏">◀</button>
+    </div>
+
+    <div class="smart-lists">
+      <div class="smart-list-item active" data-view="inbox" onclick="selectView('inbox', this)" aria-label="收集箱">
+        <span class="icon">📥</span><span>收集箱</span>
+        <span class="count">3</span>
+      </div>
+      <div class="smart-list-item" data-view="today" onclick="selectView('today', this)" aria-label="今天">
+        <span class="icon">⭐</span><span>今天</span>
+        <span class="count">5</span>
+      </div>
+      <div class="smart-list-item" data-view="all" onclick="selectView('all', this)" aria-label="全部">
+        <span class="icon">📋</span><span>全部</span>
+      </div>
+      <div class="smart-list-item" data-view="completed" onclick="selectView('completed', this)" aria-label="已完成">
+        <span class="icon">✅</span><span>已完成</span>
+      </div>
+      <div class="smart-list-item" data-view="trash" onclick="selectView('trash', this)" aria-label="回收站">
+        <span class="icon">🗑️</span><span>回收站</span>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="lists-header">
+      <span>清单</span>
+      <button class="add-list" onclick="addList()" aria-label="新建清单" title="新建清单">+</button>
+    </div>
+
+    <div id="customLists">
+      <div class="custom-list-item" data-list="work" onclick="selectList('work', this)">
+        <span class="dot" style="background:#7B6FCF"></span><span>工作</span>
+        <span class="count">4</span>
+      </div>
+      <div class="custom-list-item" data-list="personal" onclick="selectList('personal', this)">
+        <span class="dot" style="background:#D4A843"></span><span>个人</span>
+        <span class="count">2</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===== MIDDLE COLUMN ===== -->
+  <main class="middle" id="middle">
+    <div class="middle-header">
+      <div class="middle-title-row">
+        <span class="middle-title" id="viewTitle">收集箱</span>
+        <span class="middle-count" id="taskCount">3 个任务</span>
+      </div>
+
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="搜索任务..." oninput="onSearch(this.value)">
+      </div>
+
+      <div class="quick-add" onclick="this.querySelector('input').focus()">
+        <span class="plus">+</span>
+        <input type="text" id="quickAddInput" placeholder="快速添加任务，回车提交" onkeydown="onQuickAdd(event)">
+      </div>
+
+      <div class="sort-bar">
+        <span class="sort-label">排序:</span>
+        <span class="sort-option active" data-sort="manual" onclick="setSort('manual', this)">手动</span>
+        <span class="sort-option" data-sort="created_desc" onclick="setSort('created_desc', this)">最新</span>
+        <span class="sort-option" data-sort="due_asc" onclick="setSort('due_asc', this)">截止</span>
+        <span class="sort-option" data-sort="priority_desc" onclick="setSort('priority_desc', this)">优先级</span>
+      </div>
+    </div>
+
+    <div class="task-list" id="taskList">
+      <!-- Populated by JS -->
+    </div>
+  </main>
+
+  <!-- ===== RIGHT DETAIL PANEL ===== -->
+  <aside class="detail" id="detail">
+    <div class="detail-empty" id="detailEmpty">
+      <span>选择一个任务查看详情</span>
+    </div>
+    <div id="detailContent" style="display:none;display:flex;flex-direction:column;gap:16px;">
+      <!-- Populated by JS -->
+    </div>
+  </aside>
+</div>
+
+<script>
+// ===== DATA STORE =====
+const lists = {
+  inbox: { id: 'inbox', name: '收集箱', system: true },
+  work: { id: 'work', name: '工作', color: '#7B6FCF' },
+  personal: { id: 'personal', name: '个人', color: '#D4A843' },
+};
+const tags = [
+  { id: 't1', name: '工作', color: '#7B6FCF' },
+  { id: 't2', name: '个人', color: '#D4A843' },
+  { id: 't3', name: '技术', color: '#5B8CC9' },
+  { id: 't4', name: '文档', color: '#68A87A' },
+];
+
+let taskIdCounter = 100;
+const tasks = [
+  {
+    id: '1', title: '完成项目文档编写', listId: 'inbox', status: 2, priority: 3,
+    dueAt: '2026-06-10T18:00:00+08:00', isAllDay: false, reminderAt: null,
+    description: '整理项目技术文档和 API 说明', tags: ['t4'],
+    checklist: [
+      { id: 'c1', title: '编写 API 文档', completed: true },
+      { id: 'c2', title: '添加代码示例', completed: true },
+      { id: 'c3', title: '检查格式和链接', completed: false },
+    ],
+    sortOrder: 1024, completedAt: '2026-06-10T17:30:00+08:00',
+    deletedAt: null, deletionBatchId: null,
+    createdAt: '2026-06-08T09:00:00+08:00', updatedAt: '2026-06-10T17:30:00+08:00',
+  },
+  {
+    id: '2', title: '购买下周出差的机票', listId: 'work', status: 0, priority: 5,
+    dueAt: '2026-06-15T00:00:00+08:00', isAllDay: true, reminderAt: '2026-06-13T09:00:00+08:00',
+    description: '往返机票，优先选择上午航班，预算控制在 3000 以内',
+    tags: ['t1'],
+    checklist: [
+      { id: 'c4', title: '比较各平台价格', completed: true },
+      { id: 'c5', title: '确认行李额度', completed: false },
+    ],
+    sortOrder: 2048, completedAt: null,
+    deletedAt: null, deletionBatchId: null,
+    createdAt: '2026-06-09T14:00:00+08:00', updatedAt: '2026-06-10T10:00:00+08:00',
+  },
+  {
+    id: '3', title: '整理技术分享的幻灯片大纲', listId: 'inbox', status: 0, priority: 1,
+    dueAt: null, isAllDay: false, reminderAt: null,
+    description: '',
+    tags: ['t3'],
+    checklist: [],
+    sortOrder: 3072, completedAt: null,
+    deletedAt: null, deletionBatchId: null,
+    createdAt: '2026-06-10T08:30:00+08:00', updatedAt: '2026-06-10T08:30:00+08:00',
+  },
+  {
+    id: '4', title: '每周团队同步会议', listId: 'work', status: 0, priority: 3,
+    dueAt: '2026-06-11T14:00:00+08:00', isAllDay: false, reminderAt: '2026-06-11T13:45:00+08:00',
+    description: '讨论本周进展和下周计划',
+    tags: ['t1'],
+    checklist: [],
+    sortOrder: 1024, completedAt: null,
+    deletedAt: null, deletionBatchId: null,
+    createdAt: '2026-06-05T09:00:00+08:00', updatedAt: '2026-06-05T09:00:00+08:00',
+  },
+  {
+    id: '5', title: '更新个人简历', listId: 'personal', status: 0, priority: 1,
+    dueAt: '2026-06-20T00:00:00+08:00', isAllDay: true, reminderAt: null,
+    description: '添加最近的项目经验',
+    tags: ['t2'],
+    checklist: [
+      { id: 'c6', title: '整理项目列表', completed: false },
+      { id: 'c7', title: '更新技能描述', completed: false },
+    ],
+    sortOrder: 1024, completedAt: null,
+    deletedAt: null, deletionBatchId: null,
+    createdAt: '2026-06-03T16:00:00+08:00', updatedAt: '2026-06-03T16:00:00+08:00',
+  },
+  {
+    id: '6', title: '学习 Rust 异步编程', listId: 'personal', status: 0, priority: 3,
+    dueAt: null, isAllDay: false, reminderAt: null,
+    description: '阅读 Tokio 官方教程',
+    tags: ['t2', 't3'],
+    checklist: [],
+    sortOrder: 2048, completedAt: null,
+    deletedAt: null, deletionBatchId: null,
+    createdAt: '2026-06-07T20:00:00+08:00', updatedAt: '2026-06-07T20:00:00+08:00',
+  },
+  {
+    id: '7', title: '支付信用卡账单', listId: 'inbox', status: 2, priority: 5,
+    dueAt: '2026-06-05T00:00:00+08:00', isAllDay: true, reminderAt: null,
+    description: '',
+    tags: [],
+    checklist: [],
+    sortOrder: 4096, completedAt: '2026-06-05T10:00:00+08:00',
+    deletedAt: null, deletionBatchId: null,
+    createdAt: '2026-06-02T09:00:00+08:00', updatedAt: '2026-06-05T10:00:00+08:00',
+  },
+];
+
+// ===== STATE =====
+let currentView = 'inbox';
+let currentListId = null;
+let selectedTaskId = null;
+let sidebarCollapsed = false;
+let currentSort = 'manual';
+let searchQuery = '';
+
+// ===== DERIVED DATA =====
+function getActiveTasks() {
+  return tasks.filter(t => !t.deletedAt && t.status === 0);
+}
+function getViewTasks(view) {
+  const now = new Date();
+  switch (view) {
+    case 'inbox':
+      return tasks.filter(t => !t.deletedAt && t.status === 0 && t.listId === 'inbox');
+    case 'today': {
+      const tzOffset = 8 * 60;
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayEnd = new Date(todayStart.getTime() + 86400000);
+      return tasks.filter(t => {
+        if (!t.dueAt || t.deletedAt || t.status !== 0) return false;
+        const due = new Date(t.dueAt);
+        return due >= todayStart && due < todayEnd;
+      });
+    }
+    case 'all':
+      return tasks.filter(t => !t.deletedAt && t.status === 0);
+    case 'completed':
+      return tasks.filter(t => !t.deletedAt && t.status === 2);
+    case 'trash':
+      return tasks.filter(t => t.deletedAt);
+    default: return [];
+  }
+}
+function getFilteredTasks() {
+  let source;
+  if (currentListId) {
+    source = tasks.filter(t => t.listId === currentListId && !t.deletedAt && t.status === 0);
+  } else if (currentView === 'trash') {
+    source = getViewTasks('trash');
+  } else {
+    source = getViewTasks(currentView);
+  }
+
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    source = source.filter(t => t.title.toLowerCase().includes(q) || (t.description && t.description.toLowerCase().includes(q)));
+  }
+
+  // Sort
+  switch (currentSort) {
+    case 'created_desc':
+      source.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      break;
+    case 'due_asc':
+      source.sort((a, b) => {
+        if (!a.dueAt && !b.dueAt) return 0;
+        if (!a.dueAt) return 1;
+        if (!b.dueAt) return -1;
+        return new Date(a.dueAt) - new Date(b.dueAt);
+      });
+      break;
+    case 'priority_desc':
+      source.sort((a, b) => b.priority - a.priority);
+      break;
+    default:
+      source.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  return source;
+}
+function getTask(id) { return tasks.find(t => t.id === id); }
+
+// ===== RENDER =====
+function renderAll() {
+  renderTaskList();
+  renderDetail();
+  updateLayout();
+  updateCounts();
+}
+
+function updateCounts() {
+  // Update smart list counts
+  const inbox = tasks.filter(t => !t.deletedAt && t.status === 0 && t.listId === 'inbox').length;
+  const today = getViewTasks('today').length;
+  const all = tasks.filter(t => !t.deletedAt && t.status === 0).length;
+  const completed = tasks.filter(t => !t.deletedAt && t.status === 2).length;
+  const trash = tasks.filter(t => t.deletedAt).length;
+
+  const counts = { inbox, today, all, completed, trash };
+  document.querySelectorAll('.smart-list-item').forEach(el => {
+    const view = el.dataset.view;
+    const cnt = el.querySelector('.count');
+    if (cnt && counts[view] !== undefined) cnt.textContent = counts[view];
+  });
+
+  // Custom list counts
+  document.querySelectorAll('.custom-list-item').forEach(el => {
+    const listId = el.dataset.list;
+    const cnt = el.querySelector('.count');
+    if (cnt) {
+      cnt.textContent = tasks.filter(t => t.listId === listId && !t.deletedAt && t.status === 0).length;
+    }
+  });
+}
+
+function renderTaskList() {
+  const list = document.getElementById('taskList');
+  const filtered = getFilteredTasks();
+  const viewTitle = document.getElementById('viewTitle');
+  const taskCount = document.getElementById('taskCount');
+
+  if (currentListId) {
+    viewTitle.textContent = lists[currentListId]?.name || '清单';
+  } else {
+    const names = { inbox: '收集箱', today: '今天', all: '全部', completed: '已完成', trash: '回收站' };
+    viewTitle.textContent = names[currentView] || currentView;
+  }
+  taskCount.textContent = filtered.length + ' 个任务';
+
+  if (filtered.length === 0) {
+    const icons = { inbox: '📥', today: '⭐', all: '📋', completed: '✅', trash: '🗑️' };
+    const msgs = { inbox: '收集箱为空', today: '今天没有任务', all: '还没有任务', completed: '还没有已完成的任务', trash: '回收站为空' };
+    const descs = { inbox: '快速添加一个任务开始吧', today: '享受轻松的一天', all: '点击上方快速添加', completed: '完成一个任务试试', trash: '删除的任务会出现在这里' };
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">${icons[currentView] || '📋'}</div>
+        <div class="empty-title">${currentListId ? '清单为空' : (msgs[currentView] || '没有任务')}</div>
+        <div class="empty-desc">${currentListId ? '添加第一个任务' : (descs[currentView] || '')}</div>
+      </div>`;
+  } else {
+    list.innerHTML = filtered.map(t => {
+      const isActive = t.id === selectedTaskId;
+      const isCompleted = t.status === 2;
+      const isTrash = currentView === 'trash';
+      const tagObjs = (t.tags || []).map(tid => tags.find(tg => tg.id === tid)).filter(Boolean);
+      const dateStr = t.dueAt ? formatDate(t.dueAt, t.isAllDay) : '';
+      const priColors = { 0: '', 1: 'var(--color-priority-low)', 3: 'var(--color-priority-mid)', 5: 'var(--color-priority-high)' };
+      const priDot = t.priority > 0 ? `<span class="priority-dot" style="background:${priColors[t.priority]}"></span>` : '';
+
+      return `
+        <div class="task-row ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}"
+             onclick="selectTask('${t.id}')" data-task-id="${t.id}">
+          ${isTrash ? '' : `<div class="cb ${isCompleted ? 'checked' : ''}" onclick="event.stopPropagation();toggleComplete('${t.id}')">${isCompleted ? '✓' : ''}</div>`}
+          <div class="task-info">
+            <div class="task-title">${escHtml(t.title)}</div>
+          </div>
+          <div class="task-meta">
+            ${dateStr ? `<span class="task-date">${dateStr}</span>` : ''}
+            ${priDot}
+            ${tagObjs.slice(0, 2).map(tg => `<span class="tag-mini">${tg.name}</span>`).join('')}
+          </div>
+        </div>`;
+    }).join('');
+  }
+}
+
+function renderDetail() {
+  const empty = document.getElementById('detailEmpty');
+  const content = document.getElementById('detailContent');
+  const task = selectedTaskId ? getTask(selectedTaskId) : null;
+
+  if (!task) {
+    empty.style.display = 'flex';
+    content.style.display = 'none';
+    return;
+  }
+
+  empty.style.display = 'none';
+  content.style.display = 'flex';
+
+  const isTrash = currentView === 'trash' || !!task.deletedAt;
+  const taskTags = (task.tags || []).map(tid => tags.find(tg => tg.id === tid)).filter(Boolean);
+  const priLabels = { 0: '无优先级', 1: '低优先级', 3: '中优先级', 5: '高优先级' };
+  const priColors = { 0: '#9E9A95', 1: 'var(--color-priority-low)', 3: 'var(--color-priority-mid)', 5: 'var(--color-priority-high)' };
+  const priIcons = { 0: '⚪', 1: '🔵', 3: '🟡', 5: '🔴' };
+  const dueDisplay = task.dueAt ? formatDate(task.dueAt, task.isAllDay) + (task.isAllDay ? ' (全天)' : '') : '无';
+  const reminderDisplay = task.reminderAt ? formatDateTime(task.reminderAt) : '无';
+
+  content.innerHTML = `
+    <input class="detail-title-input" value="${escHtml(task.title)}" onchange="updateTaskField('${task.id}','title',this.value)" aria-label="任务标题">
+
+    <div class="field-group">
+      <span class="field-label">截止日期</span>
+      <div class="field-value" onclick="cycleDate('${task.id}')">📅 ${dueDisplay}</div>
+    </div>
+
+    ${task.dueAt ? `
+    <div class="field-group">
+      <span class="field-label">提醒时间</span>
+      <div class="field-value">🔔 ${reminderDisplay}</div>
+    </div>` : ''}
+
+    <div class="field-group">
+      <span class="field-label">优先级</span>
+      <div class="field-value" onclick="cyclePriority('${task.id}')">
+        <span style="color:${priColors[task.priority]}">${priIcons[task.priority]}</span> ${priLabels[task.priority]}
+      </div>
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">所属清单</span>
+      <div class="field-value">${lists[task.listId]?.name || task.listId}</div>
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">标签</span>
+      <div class="tags-row">
+        ${taskTags.map(tg => `
+          <span class="tag-pill">
+            <span style="width:7px;height:7px;border-radius:50%;background:${tg.color};flex-shrink:0"></span>
+            ${tg.name}
+            ${!isTrash ? `<span class="tag-remove" onclick="removeTag('${task.id}','${tg.id}')" aria-label="移除标签">×</span>` : ''}
+          </span>`).join('')}
+        ${!isTrash ? `<span class="tag-mini" style="cursor:pointer" onclick="addTag('${task.id}')">+ 添加</span>` : ''}
+      </div>
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">描述</span>
+      <textarea class="detail-desc" placeholder="添加描述..." onchange="updateTaskField('${task.id}','description',this.value)" aria-label="任务描述">${escHtml(task.description || '')}</textarea>
+    </div>
+
+    ${!isTrash ? `
+    <div class="field-group">
+      <span class="field-label">检查项 (${task.checklist.filter(c => c.completed).length}/${task.checklist.length})</span>
+      <div class="checklist">
+        ${task.checklist.map(c => `
+          <div class="checklist-item ${c.completed ? 'done' : ''}">
+            <div class="cb ${c.completed ? 'checked' : ''}" onclick="toggleCheckItem('${task.id}','${c.id}')">${c.completed ? '✓' : ''}</div>
+            <span>${escHtml(c.title)}</span>
+          </div>`).join('')}
+        <div class="add-checklist" onclick="addCheckItem('${task.id}')">+ 添加检查项</div>
+      </div>
+    </div>` : ''}
+
+    ${!isTrash ? `
+    <div class="field-group">
+      <span class="field-label">状态</span>
+      <div class="save-status saved" id="saveStatus">✓ 已保存</div>
+    </div>
+    ` : ''}
+
+    <div class="detail-actions">
+      ${isTrash ? `
+        <button class="btn btn-primary" onclick="restoreTask('${task.id}')">恢复</button>
+        <button class="btn btn-danger" onclick="permanentDelete('${task.id}')">永久删除</button>
+      ` : task.status === 2 ? `
+        <button class="btn btn-primary" onclick="reopenTask('${task.id}')">重新打开</button>
+        <button class="btn btn-danger" onclick="deleteTask('${task.id}')">删除</button>
+      ` : `
+        <button class="btn btn-primary" onclick="completeTask('${task.id}')">完成</button>
+        <button class="btn btn-danger" onclick="deleteTask('${task.id}')">删除</button>
+      `}
+    </div>
+  `;
+}
+
+function updateLayout() {
+  const app = document.getElementById('app');
+  app.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+  app.classList.toggle('no-detail', !selectedTaskId);
+
+  const toggle = document.querySelector('.sidebar-toggle');
+  toggle.textContent = sidebarCollapsed ? '▶' : '◀';
+  toggle.setAttribute('aria-label', sidebarCollapsed ? '展开侧栏' : '收起侧栏');
+}
+
+// ===== ACTIONS =====
+function selectView(view, el) {
+  currentView = view;
+  currentListId = null;
+  selectedTaskId = null;
+  document.querySelectorAll('.smart-list-item').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.custom-list-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderAll();
+}
+
+function selectList(listId, el) {
+  currentView = null;
+  currentListId = listId;
+  selectedTaskId = null;
+  document.querySelectorAll('.smart-list-item').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.custom-list-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderAll();
+}
+
+function selectTask(taskId) {
+  selectedTaskId = taskId;
+  renderAll();
+  const row = document.querySelector(`[data-task-id="${taskId}"]`);
+  if (row) row.scrollIntoView({ block: 'nearest' });
+}
+
+function toggleComplete(taskId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  if (task.status === 2) {
+    task.status = 0;
+    task.completedAt = null;
+  } else {
+    task.status = 2;
+    task.completedAt = new Date().toISOString();
+  }
+  task.updatedAt = new Date().toISOString();
+  if (currentView === 'completed' || currentView === 'inbox' || currentView === 'all' || currentView === 'today') {
+    renderAll();
+  } else {
+    renderTaskList();
+    updateCounts();
+  }
+}
+
+function completeTask(taskId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  task.status = 2;
+  task.completedAt = new Date().toISOString();
+  task.updatedAt = new Date().toISOString();
+  renderAll();
+}
+
+function reopenTask(taskId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  task.status = 0;
+  task.completedAt = null;
+  task.updatedAt = new Date().toISOString();
+  renderAll();
+}
+
+function deleteTask(taskId) {
+  showDialog('删除任务', '任务将被移动到回收站，你可以稍后恢复。确认删除吗？', () => {
+    const task = getTask(taskId);
+    if (!task) return;
+    task.deletedAt = new Date().toISOString();
+    task.deletionBatchId = crypto.randomUUID();
+    task.updatedAt = new Date().toISOString();
+    if (selectedTaskId === taskId) selectedTaskId = null;
+    renderAll();
+  });
+}
+
+function restoreTask(taskId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  task.deletedAt = null;
+  task.deletionBatchId = null;
+  task.updatedAt = new Date().toISOString();
+  currentView = 'inbox';
+  selectedTaskId = null;
+  document.querySelectorAll('.smart-list-item').forEach(e => e.classList.remove('active'));
+  document.querySelector('.smart-list-item[data-view="inbox"]')?.classList.add('active');
+  renderAll();
+}
+
+function permanentDelete(taskId) {
+  showDialog('永久删除', '此操作不可撤销！任务及其检查项和标签关联将被永久删除。确认吗？', () => {
+    const idx = tasks.findIndex(t => t.id === taskId);
+    if (idx >= 0) tasks.splice(idx, 1);
+    if (selectedTaskId === taskId) selectedTaskId = null;
+    renderAll();
+  });
+}
+
+function onQuickAdd(event) {
+  if (event.key !== 'Enter') return;
+  const input = event.target;
+  const title = input.value.trim();
+  if (!title) return;
+  input.value = '';
+
+  let listId = 'inbox';
+  if (currentListId) listId = currentListId;
+  else if (currentView === 'inbox') listId = 'inbox';
+
+  const newTask = {
+    id: String(++taskIdCounter),
+    title, listId,
+    status: 0, priority: 0,
+    dueAt: null, isAllDay: false, reminderAt: null,
+    description: '', tags: [], checklist: [],
+    sortOrder: Date.now(),
+    completedAt: null, deletedAt: null, deletionBatchId: null,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+  tasks.push(newTask);
+  selectedTaskId = newTask.id;
+  renderAll();
+}
+
+function onSearch(value) {
+  searchQuery = value;
+  renderTaskList();
+}
+
+function setSort(sort, el) {
+  currentSort = sort;
+  document.querySelectorAll('.sort-option').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderTaskList();
+}
+
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  updateLayout();
+}
+
+function cyclePriority(taskId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  const vals = [0, 1, 3, 5];
+  const idx = vals.indexOf(task.priority);
+  task.priority = vals[(idx + 1) % vals.length];
+  task.updatedAt = new Date().toISOString();
+  renderDetail();
+}
+
+function cycleDate(taskId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  if (!task.dueAt) {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    task.dueAt = d.toISOString();
+    task.isAllDay = false;
+  } else if (!task.isAllDay) {
+    task.isAllDay = true;
+  } else {
+    task.dueAt = null;
+    task.isAllDay = false;
+    task.reminderAt = null;
+  }
+  task.updatedAt = new Date().toISOString();
+  renderDetail();
+}
+
+function toggleCheckItem(taskId, itemId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  const item = task.checklist.find(c => c.id === itemId);
+  if (!item) return;
+  item.completed = !item.completed;
+  if (item.completed) item.completedAt = new Date().toISOString();
+  else item.completedAt = null;
+  renderDetail();
+}
+
+function addCheckItem(taskId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  const title = prompt('输入检查项名称:');
+  if (!title || !title.trim()) return;
+  task.checklist.push({
+    id: 'c' + Date.now(),
+    title: title.trim(),
+    completed: false,
+    sortOrder: (task.checklist.length + 1) * 1024,
+    completedAt: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  renderDetail();
+}
+
+function removeTag(taskId, tagId) {
+  const task = getTask(taskId);
+  if (!task) return;
+  task.tags = task.tags.filter(id => id !== tagId);
+  task.updatedAt = new Date().toISOString();
+  renderDetail();
+}
+
+function addTag(taskId) {
+  const available = tags.filter(t => {
+    const task = getTask(taskId);
+    return task && !task.tags.includes(t.id);
+  });
+  if (available.length === 0) { alert('所有标签已添加'); return; }
+  const names = available.map((t, i) => `${i + 1}. ${t.name}`).join('\n');
+  const choice = prompt('选择标签:\n' + names + '\n\n输入编号:');
+  const idx = parseInt(choice) - 1;
+  if (idx >= 0 && idx < available.length) {
+    const task = getTask(taskId);
+    task.tags.push(available[idx].id);
+    task.updatedAt = new Date().toISOString();
+    renderDetail();
+  }
+}
+
+function updateTaskField(taskId, field, value) {
+  const task = getTask(taskId);
+  if (!task) return;
+  task[field] = value;
+  task.updatedAt = new Date().toISOString();
+  const st = document.getElementById('saveStatus');
+  if (st) { st.textContent = '● 保存中...'; st.className = 'save-status saving'; }
+  setTimeout(() => {
+    if (st && st.parentElement) { st.textContent = '✓ 已保存'; st.className = 'save-status saved'; }
+    renderTaskList();
+  }, 500);
+}
+
+function addList() {
+  const name = prompt('清单名称:');
+  if (!name || !name.trim()) return;
+  const colors = ['#7B6FCF', '#D4A843', '#D4784A', '#5B8CC9', '#68A87A', '#D95550'];
+  const id = 'list_' + Date.now();
+  lists[id] = { id, name: name.trim(), color: colors[Math.floor(Math.random() * colors.length)] };
+  const container = document.getElementById('customLists');
+  const div = document.createElement('div');
+  div.className = 'custom-list-item';
+  div.dataset.list = id;
+  div.innerHTML = `<span class="dot" style="background:${lists[id].color}"></span><span>${escHtml(name.trim())}</span><span class="count">0</span>`;
+  div.onclick = function() { selectList(id, div); };
+  container.appendChild(div);
+}
+
+function toggleError() {
+  document.getElementById('errorOverlay').classList.toggle('hidden');
+}
+
+// ===== DIALOG =====
+let dialogCallback = null;
+function showDialog(title, msg, cb) {
+  document.getElementById('dialogTitle').textContent = title;
+  document.getElementById('dialogMsg').textContent = msg;
+  dialogCallback = cb;
+  document.getElementById('confirmDialog').classList.remove('hidden');
+}
+function closeDialog() {
+  document.getElementById('confirmDialog').classList.add('hidden');
+  dialogCallback = null;
+}
+function confirmDialog() {
+  if (dialogCallback) dialogCallback();
+  closeDialog();
+}
+
+// ===== KEYBOARD =====
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'n') {
+    e.preventDefault();
+    document.getElementById('quickAddInput').focus();
+  }
+  if (e.ctrlKey && e.key === 'f') {
+    e.preventDefault();
+    document.getElementById('searchInput').focus();
+  }
+  if (e.ctrlKey && e.key === 'Enter') {
+    e.preventDefault();
+    if (selectedTaskId) {
+      const task = getTask(selectedTaskId);
+      if (task && task.status === 0) completeTask(selectedTaskId);
+      else if (task && task.status === 2) reopenTask(selectedTaskId);
+    }
+  }
+  if (e.key === 'Escape') {
+    selectedTaskId = null;
+    renderAll();
+    if (document.activeElement) document.activeElement.blur();
+  }
+});
+
+// ===== UTILS =====
+function formatDate(iso, isAllDay) {
+  const d = new Date(iso);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  return `${m}/${day}`;
+}
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${m}/${day} ${h}:${min}`;
+}
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ===== INIT =====
+renderAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+# Todo List
+
+Windows 优先的单用户桌面 Todo List。桌面端使用 Tauri 2、React 和 TypeScript，服务端使用 FastAPI、SQLAlchemy 2 与 PostgreSQL。
+
+## 前置要求
+
+- Node.js 20 或更高版本及 npm
+- Rust stable 与 Cargo
+- Python 3.12 与 [uv](https://docs.astral.sh/uv/)
+- Docker Desktop 或 Docker Engine + Compose
+- Windows 打包需要 Microsoft WebView2 和 Visual Studio C++ Build Tools
+
+## 启动
+
+复制环境变量并启动 PostgreSQL 与 API：
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+curl http://127.0.0.1:8000/health
+```
+
+浏览器开发模式：
+
+```bash
+npm install --prefix desktop
+npm --prefix desktop run dev
+```
+
+Tauri 开发模式：
+
+```bash
+npm --prefix desktop run tauri dev
+```
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+## 后端本地开发
+
+本机运行 API 时，将 `DATABASE_URL` 中的主机改为 `127.0.0.1`：
+
+```bash
+uv sync --project server
+uv run --project server alembic upgrade head
+uv run --project server uvicorn app.main:app --app-dir server --reload
+```
+
+迁移回退和重新升级：
+
+```bash
+uv run --project server alembic downgrade base
+uv run --project server alembic upgrade head
+```
+
+## 测试与检查
+
+```bash
+uv run --project server pytest
+uv run --project server ruff check .
+uv run --project server ruff format --check .
+npm --prefix desktop test -- --run
+npm --prefix desktop run build
+cargo check --manifest-path desktop/src-tauri/Cargo.toml
+```
+
+Windows 打包：
+
+```bash
+npm --prefix desktop run tauri build
+```
+
+## 常见问题
+
+- `8000` 端口占用：停止占用该端口的进程，再重启 `api` 服务。
+- PostgreSQL 未健康：运行 `docker compose logs postgres` 检查密码、端口和磁盘空间。
+- Tauri 无法连接 API：确认 `/health` 可访问，并检查 `.env` 中 `VITE_API_BASE_URL`。
+- WebView2 缺失：安装 Microsoft Edge WebView2 Runtime。
+- 需要清空数据库：执行 `docker compose down -v`，随后重新 `docker compose up --build -d`。该操作会永久删除全部业务数据。
