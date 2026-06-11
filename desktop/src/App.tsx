@@ -362,6 +362,26 @@ function Shell() {
     },
   });
 
+  const renameTask = useCallback(
+    async (task: Task, title: string) => {
+      const saved = await api.updateTask(task.id, { title });
+      updateTaskListCache(queryClient, task.id, { title: saved.title });
+      queryClient.setQueryData(queryKeys.task(task.id), saved);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
+      return saved;
+    },
+    [queryClient],
+  );
+
+  const createInlineTask = useCallback(
+    async (title: string, listId: string) => {
+      const task = await api.createTask({ title, list_id: listId });
+      invalidateTaskData(queryClient, task.id);
+      return task;
+    },
+    [queryClient],
+  );
+
   const stateMutation = useMutation({
     mutationFn: ({ task, action }: { task: Task; action: "complete" | "reopen" }) =>
       action === "complete" ? api.completeTask(task.id) : api.reopenTask(task.id),
@@ -516,6 +536,8 @@ function Shell() {
             fetchingNext={tasks.isFetchingNextPage}
             onLoadMore={() => void tasks.fetchNextPage()}
             onSelect={openTask}
+            onRename={renameTask}
+            onCreateNext={createInlineTask}
             onToggle={(task) =>
               stateMutation.mutate({
                 task,
@@ -917,6 +939,8 @@ function TaskListPanel({
   fetchingNext,
   onLoadMore,
   onSelect,
+  onRename,
+  onCreateNext,
   onToggle,
 }: {
   tasks: Task[];
@@ -928,8 +952,83 @@ function TaskListPanel({
   fetchingNext: boolean;
   onLoadMore: () => void;
   onSelect: (id: string) => void;
+  onRename: (task: Task, title: string) => Promise<Task>;
+  onCreateNext: (title: string, listId: string) => Promise<Task>;
   onToggle: (task: Task) => void;
 }) {
+  const [editingTaskId, setEditingTaskId] = useState<string>();
+  const [editTitle, setEditTitle] = useState("");
+  const [draftAfterTaskId, setDraftAfterTaskId] = useState<string>();
+  const [newTitle, setNewTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [inlineError, setInlineError] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+  const newInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editingTaskId || saving) return;
+    const input = editInputRef.current;
+    if (!input) return;
+    input.focus();
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  }, [editingTaskId, saving]);
+
+  useEffect(() => {
+    if (!draftAfterTaskId || saving) return;
+    newInputRef.current?.focus();
+  }, [draftAfterTaskId, saving]);
+
+  const beginEditing = (task: Task) => {
+    if (view === "trash") {
+      void onSelect(task.id);
+      return;
+    }
+    setDraftAfterTaskId(undefined);
+    setNewTitle("");
+    setInlineError("");
+    setEditingTaskId(task.id);
+    setEditTitle(task.title);
+  };
+
+  const finishEditing = async (task: Task, createNext: boolean) => {
+    if (saving) return;
+    const cleaned = editTitle.trim();
+    setInlineError("");
+    setSaving(true);
+    try {
+      if (cleaned && cleaned !== task.title) await onRename(task, cleaned);
+      setEditingTaskId(undefined);
+      if (createNext) {
+        setDraftAfterTaskId(task.id);
+        setNewTitle("");
+      }
+    } catch (saveError) {
+      setInlineError(errorMessage(saveError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const createNextTask = async (task: Task) => {
+    if (saving) return;
+    const cleaned = newTitle.trim();
+    if (!cleaned) {
+      newInputRef.current?.focus();
+      return;
+    }
+    setInlineError("");
+    setSaving(true);
+    try {
+      await onCreateNext(cleaned, task.list_id);
+      setNewTitle("");
+    } catch (createError) {
+      setInlineError(errorMessage(createError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) return <PanelState icon={<LoaderCircle className="spin" />} title="正在加载任务" />;
   if (error) return <PanelState icon={<CircleAlert />} title="任务加载失败" description={errorMessage(error)} />;
   if (!tasks.length) {
@@ -951,42 +1050,105 @@ function TaskListPanel({
         if (hasNext && node.scrollHeight - node.scrollTop - node.clientHeight < 80) onLoadMore();
       }}
     >
-      {tasks.map((task) => (
-        <div
-          key={task.id}
-          role="button"
-          tabIndex={0}
-          className={`task-row ${activeTaskId === task.id ? "active" : ""} ${task.status === 2 ? "completed" : ""}`}
-          onClick={() => void onSelect(task.id)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              void onSelect(task.id);
-            }
-          }}
-        >
-          {view !== "trash" && (
-            <Checkbox
-              checked={task.status === 2}
-              aria-label={task.status === 2 ? "重新打开任务" : "完成任务"}
-              className={`checkbox task-checkbox ${
-                task.priority > 0 ? `has-priority priority-${task.priority}` : ""
-              } ${task.status === 2 ? "checked" : ""}`}
-              onClick={(event) => {
-                event.stopPropagation();
+      {tasks.map((task) => {
+        const editing = editingTaskId === task.id;
+        const showDraft = draftAfterTaskId === task.id;
+        return (
+          <div key={task.id}>
+            <div
+              role={editing ? undefined : "button"}
+              tabIndex={editing ? undefined : 0}
+              aria-label={editing ? undefined : `编辑任务 ${task.title}`}
+              className={`task-row ${editing ? "editing" : ""} ${activeTaskId === task.id ? "active" : ""} ${task.status === 2 ? "completed" : ""}`}
+              onClick={() => {
+                if (!editing) beginEditing(task);
               }}
-              onCheckedChange={() => onToggle(task)}
-            />
-          )}
-          <span className="task-title">{task.title}</span>
-          <span className="task-meta">
-            {task.due_at && (
-              <span className={`task-date ${dueDateTone(task)}`}>{formatDue(task)}</span>
+              onDoubleClick={() => void onSelect(task.id)}
+              onKeyDown={(event) => {
+                if (!editing && event.key === "Enter") {
+                  event.preventDefault();
+                  beginEditing(task);
+                }
+              }}
+            >
+              {view !== "trash" && (
+                <Checkbox
+                  checked={task.status === 2}
+                  aria-label={task.status === 2 ? "重新打开任务" : "完成任务"}
+                  className={`checkbox task-checkbox ${
+                    task.priority > 0 ? `has-priority priority-${task.priority}` : ""
+                  } ${task.status === 2 ? "checked" : ""}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onCheckedChange={() => onToggle(task)}
+                />
+              )}
+              {editing ? (
+                <Input
+                  ref={editInputRef}
+                  className="task-title-input"
+                  value={editTitle}
+                  disabled={saving}
+                  aria-label="编辑任务标题"
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => setEditTitle(event.target.value)}
+                  onBlur={() => void finishEditing(task, false)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      void finishEditing(task, true);
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setEditingTaskId(undefined);
+                      setEditTitle(task.title);
+                      setInlineError("");
+                    }
+                  }}
+                />
+              ) : (
+                <span className="task-title">{task.title}</span>
+              )}
+              {!editing && (
+                <span className="task-meta">
+                  {task.due_at && (
+                    <span className={`task-date ${dueDateTone(task)}`}>{formatDue(task)}</span>
+                  )}
+                  {task.tags.slice(0, 2).map((tag) => <span className="tag-mini" key={tag.id}>{tag.name}</span>)}
+                </span>
+              )}
+            </div>
+            {showDraft && view !== "trash" && (
+              <div className="task-row inline-task-create">
+                <span className="inline-task-placeholder" aria-hidden="true" />
+                <Input
+                  ref={newInputRef}
+                  className="task-title-input"
+                  value={newTitle}
+                  disabled={saving}
+                  placeholder="输入任务标题，回车创建"
+                  aria-label="新任务标题"
+                  onChange={(event) => setNewTitle(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      void createNextTask(task);
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setDraftAfterTaskId(undefined);
+                      setNewTitle("");
+                      setInlineError("");
+                    }
+                  }}
+                />
+              </div>
             )}
-            {task.tags.slice(0, 2).map((tag) => <span className="tag-mini" key={tag.id}>{tag.name}</span>)}
-          </span>
-        </div>
-      ))}
+          </div>
+        );
+      })}
+      {inlineError && <div className="inline-error task-list-error">{inlineError}</div>}
       {fetchingNext && <div className="next-page"><LoaderCircle className="spin" /> 加载更多</div>}
     </div>
   );

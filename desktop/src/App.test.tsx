@@ -69,6 +69,39 @@ describe("Todo List app", () => {
     expect(screen.getByText("任务详情")).toBeInTheDocument();
   });
 
+  it("edits a task title directly from the task list", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByText("编写测试"));
+    const input = screen.getByRole<HTMLInputElement>("textbox", { name: "编辑任务标题" });
+    expect(input).toHaveFocus();
+    expect(input.selectionStart).toBe(input.value.length);
+    expect(input.selectionEnd).toBe(input.value.length);
+
+    await user.clear(input);
+    await user.type(input, "更新测试任务");
+    await user.tab();
+
+    expect(await screen.findByText("更新测试任务")).toBeInTheDocument();
+  });
+
+  it("opens a new task input on Enter and keeps it ready after creation", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByText("编写测试"));
+    await user.keyboard("{Enter}");
+
+    const newTaskInput = await screen.findByRole("textbox", { name: "新任务标题" });
+    expect(newTaskInput).toHaveFocus();
+    await user.type(newTaskInput, "下一条任务{Enter}");
+
+    expect(await screen.findByText("下一条任务")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "新任务标题" })).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "新任务标题" })).toHaveFocus();
+  });
+
   it("switches smart-list routes without losing the shell", async () => {
     const user = userEvent.setup();
     renderApp();
