@@ -506,8 +506,12 @@ function Sidebar({
   return (
     <nav className="sidebar" aria-label="任务导航">
       <div className="sidebar-header">
-        <div className="logo">T</div>
-        {!collapsed && <strong>Todo List</strong>}
+        {!collapsed && (
+          <>
+            <div className="logo">T</div>
+            <strong>Todo List</strong>
+          </>
+        )}
         <button className="icon-button sidebar-toggle" onClick={onToggle} aria-label={collapsed ? "展开侧栏" : "收起侧栏"}>
           {collapsed ? <ChevronRight /> : <ChevronLeft />}
         </button>

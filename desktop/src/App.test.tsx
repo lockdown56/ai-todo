@@ -33,7 +33,10 @@ describe("Todo List app", () => {
     await user.click(screen.getByRole("button", { name: "收起侧栏" }));
 
     expect(localStorage.getItem("todo-sidebar-collapsed")).toBe("true");
-    expect(screen.getByRole("button", { name: "展开侧栏" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "展开侧栏" }));
+
+    expect(localStorage.getItem("todo-sidebar-collapsed")).toBe("false");
+    expect(screen.getByRole("button", { name: "收起侧栏" })).toBeInTheDocument();
   });
 
   it("quick-adds a task and opens its detail panel", async () => {

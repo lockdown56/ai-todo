@@ -50,6 +50,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .logo { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 auto; color: white; background: var(--primary); border-radius: 7px; font-size: 13px; font-weight: 700; }
 .sidebar-header strong { font-size: 15px; font-weight: 600; }
 .sidebar-toggle { margin-left: auto; }
+.sidebar-collapsed .sidebar-header { justify-content: center; padding: 0; }
+.sidebar-collapsed .sidebar-toggle { margin-left: 0; }
 .icon-button { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
 .icon-button:hover { color: var(--primary); background: var(--primary-light); }
 .icon-button:disabled { opacity: .3; cursor: default; }
