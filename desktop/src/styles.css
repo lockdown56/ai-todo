@@ -241,6 +241,41 @@
   position: relative;
 }
 
+.app-shell:not(.sidebar-collapsed) .custom-list-wrap .nav-item {
+  padding-right: 46px;
+}
+
+.collapsed-list-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--list-color) 16%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--list-color) 34%, white);
+  color: color-mix(in srgb, var(--list-color) 78%, #263244);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.list-tooltip {
+  display: flex;
+  min-width: 120px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.list-tooltip strong {
+  font-weight: 600;
+}
+
+.list-tooltip span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
 .list-dot {
   width: 9px;
   height: 9px;
@@ -256,8 +291,15 @@
 }
 
 .nav-count {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
   color: var(--muted-foreground);
   font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
+  transition: opacity 70ms ease-out;
 }
 
 .list-menu-button {
@@ -265,12 +307,20 @@
   top: 5px;
   right: 6px;
   opacity: 0;
+  transition: opacity 70ms ease-out, color 140ms ease-out, background-color 140ms ease-out;
 }
 
 .custom-list-wrap:hover .list-menu-button,
+.custom-list-wrap:focus-within .list-menu-button,
 .list-menu-button:focus-visible,
 .list-menu-button[data-state="open"] {
   opacity: 1;
+}
+
+.custom-list-wrap:hover .nav-count,
+.custom-list-wrap:focus-within .nav-count,
+.custom-list-wrap:has(.list-menu-button[data-state="open"]) .nav-count {
+  opacity: 0;
 }
 
 .sidebar-backdrop,

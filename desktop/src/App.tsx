@@ -86,6 +86,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { api } from "./api";
 import { queryKeys } from "./query";
@@ -667,53 +673,74 @@ function Sidebar({
           </Button>
         </div>
       )}
-      <div className="nav-section custom-lists">
-        {lists
-          .filter((item) => !item.system_type)
-          .map((list) => (
-            <div className="custom-list-wrap" key={list.id}>
-              <Button
-                variant="ghost"
-                className={`nav-item ${scope.listId === list.id ? "active" : ""}`}
-                onClick={() => void onNavigate(`/list/${list.id}`)}
-                title={list.name}
-              >
-                <span className="list-dot" style={{ backgroundColor: list.color }} />
-                {!collapsed && (
-                  <>
-                    <span className="nav-label">{list.name}</span>
-                    <span className="nav-count">{list.task_count}</span>
-                  </>
-                )}
-              </Button>
-              {!collapsed && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+      <TooltipProvider delayDuration={80} skipDelayDuration={100}>
+        <div className="nav-section custom-lists">
+          {lists
+            .filter((item) => !item.system_type)
+            .map((list) => (
+              <div className="custom-list-wrap" key={list.id}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
-                      size="icon-sm"
-                      className="icon-button list-menu-button"
-                      aria-label={`管理清单 ${list.name}`}
+                      className={`nav-item ${scope.listId === list.id ? "active" : ""}`}
+                      onClick={() => void onNavigate(`/list/${list.id}`)}
+                      title={collapsed ? undefined : list.name}
+                      aria-label={collapsed ? `${list.name}，${list.task_count} 个任务` : undefined}
                     >
-                      <MoreHorizontal />
+                      {collapsed ? (
+                        <span
+                          className="collapsed-list-mark"
+                          style={{ "--list-color": list.color } as React.CSSProperties}
+                          aria-hidden="true"
+                        >
+                          {Array.from(list.name.trim())[0]?.toUpperCase() || "·"}
+                        </span>
+                      ) : (
+                        <>
+                          <span className="list-dot" style={{ backgroundColor: list.color }} />
+                          <span className="nav-label">{list.name}</span>
+                          <span className="nav-count">{list.task_count}</span>
+                        </>
+                      )}
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    aria-label={`清单 ${list.name} 操作`}
-                  >
-                    <DropdownMenuItem onSelect={() => onEdit(list)}>重命名</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => onColor(list)}>更改颜色</DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem variant="destructive" onSelect={() => onDelete(list)}>
-                      删除
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </div>
-          ))}
-      </div>
+                  </TooltipTrigger>
+                  {collapsed && (
+                    <TooltipContent side="right" align="center" className="list-tooltip">
+                      <strong>{list.name}</strong>
+                      <span>{list.task_count} 个任务</span>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+                {!collapsed && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="icon-button list-menu-button"
+                        aria-label={`管理清单 ${list.name}`}
+                      >
+                        <MoreHorizontal />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      aria-label={`清单 ${list.name} 操作`}
+                    >
+                      <DropdownMenuItem onSelect={() => onEdit(list)}>重命名</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onColor(list)}>更改颜色</DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onSelect={() => onDelete(list)}>
+                        删除
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
+            ))}
+        </div>
+      </TooltipProvider>
     </nav>
   );
 }

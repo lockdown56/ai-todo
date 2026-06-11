@@ -214,6 +214,11 @@ describe("Todo List app", () => {
     await screen.findByRole("heading", { name: "收集箱" });
     const shell = container.querySelector(".app-shell");
     expect(shell).toHaveClass("compact-sidebar", "sidebar-collapsed");
+    const collapsedList = screen.getByRole("button", { name: "工作，0 个任务" });
+    expect(collapsedList).toHaveTextContent("工");
+
+    await user.hover(collapsedList);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("工作0 个任务");
 
     await user.click(screen.getByRole("button", { name: "展开侧栏" }));
     expect(shell).toHaveClass("sidebar-overlay-open");
