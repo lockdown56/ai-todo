@@ -79,4 +79,5 @@ npm --prefix desktop run tauri build
 - PostgreSQL 未健康：运行 `docker compose logs postgres` 检查密码、端口和磁盘空间。
 - Tauri 无法连接 API：确认 `/health` 可访问，并检查 `.env` 中 `VITE_API_BASE_URL`。
 - WebView2 缺失：安装 Microsoft Edge WebView2 Runtime。
+- WSLg 下无法切换中文输入法：Windows 输入法不会传入 Linux GUI。安装 `fcitx5`、`fcitx5-chinese-addons` 和 `fcitx5-frontend-gtk3`；应用会在 WSL 中自动配置并启动 Fcitx5。
 - 需要清空数据库：执行 `docker compose down -v`，随后重新 `docker compose up --build -d`。该操作会永久删除全部业务数据。

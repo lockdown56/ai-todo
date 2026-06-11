@@ -91,6 +91,32 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "操作失败";
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return (
+    Boolean(target.closest("input, textarea, select")) ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+function isImeComposing(event: KeyboardEvent): boolean {
+  return event.isComposing || event.key === "Process" || event.keyCode === 229;
+}
+
+function shouldIgnoreAppShortcut(event: KeyboardEvent): boolean {
+  return isImeComposing(event) || isEditableTarget(event.target);
+}
+
+function isCtrlShortcut(event: KeyboardEvent, key: string): boolean {
+  return (
+    event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === key
+  );
+}
+
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -250,10 +276,11 @@ function Shell() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.key.toLowerCase() === "n") {
+      if (!shouldIgnoreAppShortcut(event) && isCtrlShortcut(event, "n")) {
         event.preventDefault();
         quickAddRef.current?.focus();
       }
+      if (isImeComposing(event)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         if (sidebarOverlayOpen) {
@@ -313,7 +340,17 @@ function Shell() {
 
   useEffect(() => {
     const onCompleteShortcut = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey && event.key === "Enter") || !selectedTaskId) return;
+      if (
+        shouldIgnoreAppShortcut(event) ||
+        !event.ctrlKey ||
+        event.altKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        event.key !== "Enter" ||
+        !selectedTaskId
+      ) {
+        return;
+      }
       const task = taskItems.find((item) => item.id === selectedTaskId);
       if (!task || task.deleted_at) return;
       event.preventDefault();
@@ -348,7 +385,7 @@ function Shell() {
           compactSidebar ? "compact-sidebar" : "",
           sidebarOverlayOpen ? "sidebar-overlay-open" : "",
           detailDrawer ? "detail-drawer" : "",
-          selectedTaskId ? "" : "detail-hidden",
+          detailDrawer && !selectedTaskId ? "detail-hidden" : "",
         ].join(" ")}
       >
         <Sidebar
@@ -662,11 +699,12 @@ function TaskHeader({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.key.toLowerCase() === "f") {
+      if (!shouldIgnoreAppShortcut(event) && isCtrlShortcut(event, "f")) {
         event.preventDefault();
         setSearchOpen(true);
         window.requestAnimationFrame(() => searchRef.current?.focus());
       }
+      if (isImeComposing(event)) return;
       if (event.key === "Escape" && (searchOpen || sortOpen)) {
         event.preventDefault();
         event.stopPropagation();
@@ -1170,7 +1208,7 @@ function DateTimePicker({
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (isImeComposing(event) || event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();

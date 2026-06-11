@@ -14,10 +14,10 @@
   --input: #f3f5f7;
   --danger: #c84f4a;
   --warning: #b87924;
-  --detail-width: 420px;
+  --detail-width: clamp(420px, 32vw, 800px);
   --sidebar-width: 240px;
   --sidebar-collapsed: 64px;
-  --content-width: 820px;
+  --content-gutter: 28px;
 }
 
 * { box-sizing: border-box; }
@@ -40,8 +40,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   transition: grid-template-columns 160ms ease-out;
 }
 .app-shell.sidebar-collapsed { grid-template-columns: var(--sidebar-collapsed) minmax(420px, 1fr) var(--detail-width); }
-.app-shell.detail-hidden { grid-template-columns: var(--sidebar-width) minmax(420px, 1fr) 0; }
-.app-shell.sidebar-collapsed.detail-hidden { grid-template-columns: var(--sidebar-collapsed) minmax(420px, 1fr) 0; }
 
 .sidebar {
   z-index: 30;
@@ -90,7 +88,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .detail-backdrop { z-index: 40; }
 
 .middle-panel { display: flex; min-width: 0; flex-direction: column; background: var(--surface); border-right: 1px solid var(--border); overflow: hidden; }
-.middle-header { width: min(100%, var(--content-width)); flex: 0 0 auto; margin: 0 auto; padding: 28px 28px 14px; }
+.middle-header { width: 100%; flex: 0 0 auto; margin: 0; padding: 28px var(--content-gutter) 14px; }
 .title-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
 .title-row > div:first-child { display: flex; min-width: 0; align-items: baseline; gap: 10px; }
 .title-row h1 { margin: 0; overflow: hidden; font-size: 22px; font-weight: 650; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
@@ -115,7 +113,7 @@ input::placeholder, textarea::placeholder { color: #9ba4af; }
 .sort-popover button { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
 .sort-popover button.active { color: var(--primary); background: var(--primary-light); }
 .sort-popover svg { width: 15px; height: 15px; }
-.task-list { width: min(100%, var(--content-width)); min-height: 0; flex: 1; margin: 0 auto; overflow-y: auto; padding: 0 28px 30px; }
+.task-list { width: 100%; min-height: 0; flex: 1; margin: 0; overflow-y: auto; padding: 0 var(--content-gutter) 30px; }
 .task-row { display: flex; align-items: center; width: 100%; min-height: 50px; gap: 12px; padding: 8px 12px; border: 1px solid transparent; border-radius: 9px; background: transparent; cursor: pointer; text-align: left; transition: background 140ms ease-out, border-color 140ms ease-out; }
 .task-row:hover { background: #f6f8fa; }
 .task-row.active { border-color: #dbe4f1; background: var(--primary-light); }
@@ -137,9 +135,9 @@ input::placeholder, textarea::placeholder { color: #9ba4af; }
 .next-page { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; color: var(--muted); font-size: 12px; }
 
 .detail-panel { z-index: 50; min-width: 0; overflow: hidden; background: var(--surface); }
-.detail-content { display: flex; width: var(--detail-width); height: 100%; flex-direction: column; gap: 18px; padding: 24px 26px; overflow-y: auto; }
+.detail-content { display: flex; width: 100%; height: 100%; flex-direction: column; gap: 18px; padding: 24px 26px; overflow-y: auto; }
 .detail-toolbar { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 13px; }
-.detail-empty { display: flex; width: var(--detail-width); height: 100%; align-items: center; justify-content: center; flex-direction: column; gap: 14px; color: #adb5bf; font-size: 13px; }
+.detail-empty { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; flex-direction: column; gap: 14px; color: #adb5bf; font-size: 13px; }
 .detail-title-input { width: 100%; padding: 7px 2px 10px; border: 0; border-bottom: 1px solid transparent; border-radius: 0; color: #29313d; background: transparent; font-size: 18px; font-weight: 650; line-height: 1.4; outline: 0; }
 .detail-title-input:hover { border-bottom-color: var(--border); }
 .detail-title-input:focus { border-bottom-color: var(--primary); }
@@ -236,7 +234,7 @@ input::placeholder, textarea::placeholder { color: #9ba4af; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 4px; }
 .new-list-dialog label { color: var(--secondary); font-size: 14px; font-weight: 600; }
 .new-list-dialog label input { height: 42px; font-weight: 400; }
-.deleted-lists { width: min(calc(100% - 56px), calc(var(--content-width) - 56px)); margin: 0 auto 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: #f7f9fb; }
+.deleted-lists { margin: 0 var(--content-gutter) 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: #f7f9fb; }
 .deleted-lists > div { display: flex; align-items: center; gap: 9px; min-height: 36px; font-size: 13px; }
 .deleted-lists > div > span:nth-child(2) { flex: 1; }
 .deleted-lists button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border: 0; background: transparent; cursor: pointer; font-size: 12px; }
@@ -249,11 +247,9 @@ input::placeholder, textarea::placeholder { color: #9ba4af; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 @media (max-width: 1279px) {
-  :root { --detail-width: 380px; }
+  :root { --detail-width: 380px; --content-gutter: 24px; }
   .app-shell.compact-sidebar { grid-template-columns: var(--sidebar-collapsed) minmax(420px, 1fr) var(--detail-width); }
-  .app-shell.compact-sidebar.detail-hidden { grid-template-columns: var(--sidebar-collapsed) minmax(420px, 1fr) 0; }
   .compact-sidebar.sidebar-overlay-open .sidebar { position: fixed; top: 0; bottom: 0; left: 0; width: var(--sidebar-width); box-shadow: 10px 0 30px rgba(35, 44, 56, .14); }
-  .middle-header, .task-list { padding-right: 24px; padding-left: 24px; }
   .detail-content { padding-right: 22px; padding-left: 22px; }
 }
 
@@ -277,8 +273,9 @@ input::placeholder, textarea::placeholder { color: #9ba4af; }
 }
 
 @media (max-width: 760px) {
-  .middle-header { padding: 22px 18px 12px; }
-  .task-list { padding: 0 18px 24px; }
+  :root { --content-gutter: 18px; }
+  .middle-header { padding-top: 22px; padding-bottom: 12px; }
+  .task-list { padding-bottom: 24px; }
   .sort-trigger span { display: none; }
   .task-meta .tag-mini { display: none; }
   .detail-field { grid-template-columns: 20px 72px minmax(0, 1fr); }

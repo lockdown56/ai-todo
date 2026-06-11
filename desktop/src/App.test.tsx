@@ -35,10 +35,12 @@ function setWindowWidth(width: number) {
 describe("Todo List app", () => {
   it("renders the three-column shell and persists sidebar collapse", async () => {
     const user = userEvent.setup();
-    renderApp();
+    const { container } = renderApp();
 
     expect(await screen.findByRole("heading", { name: "收集箱" })).toBeInTheDocument();
     expect(await screen.findByText("编写测试")).toBeInTheDocument();
+    expect(container.querySelector(".app-shell")).not.toHaveClass("detail-hidden");
+    expect(screen.getByText("选择一个任务查看详情")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "收起侧栏" }));
 
     expect(localStorage.getItem("todo-sidebar-collapsed")).toBe("true");
@@ -46,6 +48,14 @@ describe("Todo List app", () => {
 
     expect(localStorage.getItem("todo-sidebar-collapsed")).toBe("false");
     expect(screen.getByRole("button", { name: "收起侧栏" })).toBeInTheDocument();
+  });
+
+  it("hides the empty detail panel when the layout switches to a drawer", async () => {
+    setWindowWidth(1000);
+    const { container } = renderApp();
+
+    expect(await screen.findByRole("heading", { name: "收集箱" })).toBeInTheDocument();
+    expect(container.querySelector(".app-shell")).toHaveClass("detail-drawer", "detail-hidden");
   });
 
   it("quick-adds a task and opens its detail panel", async () => {
@@ -112,6 +122,47 @@ describe("Todo List app", () => {
     await user.type(await screen.findByRole("textbox", { name: "搜索任务" }), "测试");
     await waitFor(() => expect(requestedQueries).toContain("测试"), { timeout: 1200 });
     expect(requestedQueries.filter((query) => query === "测试")).toHaveLength(1);
+  });
+
+  it("does not intercept application shortcuts while editing text", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    const input = await screen.findByRole("textbox", { name: "快速添加任务" });
+    await user.click(input);
+
+    const newTaskShortcut = new KeyboardEvent("keydown", {
+      key: "n",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    const searchShortcut = new KeyboardEvent("keydown", {
+      key: "f",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    expect(input.dispatchEvent(newTaskShortcut)).toBe(true);
+    expect(input.dispatchEvent(searchShortcut)).toBe(true);
+    expect(input).toHaveFocus();
+    expect(screen.queryByRole("textbox", { name: "搜索任务" })).not.toBeInTheDocument();
+  });
+
+  it("does not close task details while an IME composition is active", async () => {
+    renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
+
+    const title = await screen.findByRole("textbox", { name: "任务标题" });
+    const escape = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(escape, "isComposing", { value: true });
+
+    expect(title.dispatchEvent(escape)).toBe(true);
+    expect(screen.getByText("任务详情")).toBeInTheDocument();
   });
 
   it("opens the sort menu and updates the active sort", async () => {
