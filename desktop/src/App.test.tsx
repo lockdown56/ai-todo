@@ -80,6 +80,32 @@ describe("Todo List app", () => {
     expect(screen.getByRole("navigation", { name: "任务导航" })).toBeInTheDocument();
   });
 
+  it("renders list actions outside the scrollable list container", async () => {
+    const user = userEvent.setup();
+    const { container } = renderApp();
+
+    await user.click(await screen.findByRole("button", { name: "管理清单 工作" }));
+
+    const menu = screen.getByRole("menu", { name: "管理清单 工作" });
+    expect(menu).toBeInTheDocument();
+    expect(container.querySelector(".custom-lists")).not.toContainElement(menu);
+    expect(container).not.toContainElement(menu);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu", { name: "管理清单 工作" })).not.toBeInTheDocument();
+  });
+
+  it("opens a styled dialog for renaming a list", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByRole("button", { name: "管理清单 工作" }));
+    await user.click(screen.getByRole("menuitem", { name: "重命名" }));
+
+    expect(screen.getByRole("dialog", { name: "重命名清单" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "名称" })).toHaveValue("工作");
+  });
+
   it("completes a task from the task row", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -101,7 +127,8 @@ describe("Todo List app", () => {
     const checkbox = await screen.findByRole("checkbox", { name: "完成任务" });
     expect(checkbox).toHaveClass("priority-3");
 
-    await user.selectOptions(screen.getByRole("combobox", { name: "优先级" }), "5");
+    await user.click(screen.getByRole("combobox", { name: "优先级" }));
+    await user.click(screen.getByRole("option", { name: "高" }));
 
     expect(checkbox).toHaveClass("priority-5");
     expect(checkbox).not.toHaveClass("priority-3");

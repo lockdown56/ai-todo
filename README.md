@@ -1,6 +1,6 @@
 # Todo List
 
-Windows 优先的单用户桌面 Todo List。桌面端使用 Tauri 2、React 和 TypeScript，服务端使用 FastAPI、SQLAlchemy 2 与 PostgreSQL。
+Windows 优先的单用户桌面 Todo List。桌面端使用 Tauri 2、React、TypeScript、Tailwind CSS 4 和 shadcn/ui，服务端使用 FastAPI、SQLAlchemy 2 与 PostgreSQL。
 
 ## 前置要求
 

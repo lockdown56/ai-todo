@@ -45,7 +45,49 @@ import {
   useState,
 } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import { api, ApiError } from "./api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { api } from "./api";
 import { queryKeys } from "./query";
 import type {
   ChecklistItem,
@@ -189,7 +231,10 @@ function Shell() {
     message: string;
     action: () => void;
   } | null>(null);
-  const [newListOpen, setNewListOpen] = useState(false);
+  const [listDialog, setListDialog] = useState<{
+    mode: "create" | "rename" | "color";
+    list?: TaskList;
+  } | null>(null);
 
   const scope: Scope =
     params.listId !== undefined
@@ -276,6 +321,7 @@ function Shell() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (!shouldIgnoreAppShortcut(event) && isCtrlShortcut(event, "n")) {
         event.preventDefault();
         quickAddRef.current?.focus();
@@ -394,21 +440,9 @@ function Shell() {
           scope={scope}
           onToggle={toggleSidebar}
           onNavigate={navigateAfterFlush}
-          onAdd={() => setNewListOpen(true)}
-          onEdit={(list) => {
-            const name = window.prompt("清单名称", list.name)?.trim();
-            if (!name) return;
-            void api
-              .updateList(list.id, { name })
-              .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.lists }));
-          }}
-          onColor={(list) => {
-            const color = window.prompt("清单颜色（#RRGGBB）", list.color)?.trim();
-            if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return;
-            void api
-              .updateList(list.id, { color })
-              .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.lists }));
-          }}
+          onAdd={() => setListDialog({ mode: "create" })}
+          onEdit={(list) => setListDialog({ mode: "rename", list })}
+          onColor={(list) => setListDialog({ mode: "color", list })}
           onDelete={(list) =>
             setConfirm({
               title: "删除清单",
@@ -536,15 +570,23 @@ function Shell() {
           )}
         </aside>
       </div>
-      {newListOpen && (
-        <NewListDialog
-          onClose={() => setNewListOpen(false)}
-          onSubmit={(name, color) =>
-            void api.createList({ name, color }).then(() => {
-              setNewListOpen(false);
-              void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
-            })
-          }
+      {listDialog && (
+        <ListDialog
+          key={`${listDialog.mode}:${listDialog.list?.id || "new"}`}
+          mode={listDialog.mode}
+          list={listDialog.list}
+          onClose={() => setListDialog(null)}
+          onSubmit={async ({ name, color }) => {
+            if (listDialog.mode === "create") {
+              await api.createList({ name, color });
+            } else if (listDialog.list && listDialog.mode === "rename") {
+              await api.updateList(listDialog.list.id, { name });
+            } else if (listDialog.list) {
+              await api.updateList(listDialog.list.id, { color });
+            }
+            setListDialog(null);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.lists });
+          }}
         />
       )}
       {confirm && (
@@ -580,7 +622,6 @@ function Sidebar({
   onColor: (list: TaskList) => void;
   onDelete: (list: TaskList) => void;
 }) {
-  const [menuId, setMenuId] = useState<string>();
   return (
     <nav className="sidebar" aria-label="任务导航">
       <div className="sidebar-header">
@@ -590,23 +631,30 @@ function Sidebar({
             <strong>Todo List</strong>
           </>
         )}
-        <button className="icon-button sidebar-toggle" onClick={onToggle} aria-label={collapsed ? "展开侧栏" : "收起侧栏"}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="icon-button sidebar-toggle"
+          onClick={onToggle}
+          aria-label={collapsed ? "展开侧栏" : "收起侧栏"}
+        >
           {collapsed ? <ChevronRight /> : <ChevronLeft />}
-        </button>
+        </Button>
       </div>
       <div className="nav-section">
         {(Object.keys(viewNames) as TaskView[]).map((view) => {
           const Icon = viewIcons[view];
           return (
-            <button
+            <Button
               key={view}
+              variant="ghost"
               className={`nav-item ${scope.view === view ? "active" : ""}`}
               onClick={() => void onNavigate(`/view/${view}`)}
               title={viewNames[view]}
             >
               <Icon />
               {!collapsed && <span>{viewNames[view]}</span>}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -614,9 +662,9 @@ function Sidebar({
       {!collapsed && (
         <div className="lists-heading">
           <span>清单</span>
-          <button className="icon-button" onClick={onAdd} aria-label="新建清单">
+          <Button variant="ghost" size="icon-sm" className="icon-button" onClick={onAdd} aria-label="新建清单">
             <Plus />
-          </button>
+          </Button>
         </div>
       )}
       <div className="nav-section custom-lists">
@@ -624,7 +672,8 @@ function Sidebar({
           .filter((item) => !item.system_type)
           .map((list) => (
             <div className="custom-list-wrap" key={list.id}>
-              <button
+              <Button
+                variant="ghost"
                 className={`nav-item ${scope.listId === list.id ? "active" : ""}`}
                 onClick={() => void onNavigate(`/list/${list.id}`)}
                 title={list.name}
@@ -636,22 +685,31 @@ function Sidebar({
                     <span className="nav-count">{list.task_count}</span>
                   </>
                 )}
-              </button>
+              </Button>
               {!collapsed && (
-                <button
-                  className="icon-button list-menu-button"
-                  aria-label={`管理清单 ${list.name}`}
-                  onClick={() => setMenuId(menuId === list.id ? undefined : list.id)}
-                >
-                  <MoreHorizontal />
-                </button>
-              )}
-              {menuId === list.id && (
-                <div className="popover list-popover">
-                  <button onClick={() => { setMenuId(undefined); onEdit(list); }}>重命名</button>
-                  <button onClick={() => { setMenuId(undefined); onColor(list); }}>更改颜色</button>
-                  <button className="danger-text" onClick={() => { setMenuId(undefined); onDelete(list); }}>删除</button>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="icon-button list-menu-button"
+                      aria-label={`管理清单 ${list.name}`}
+                    >
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    aria-label={`清单 ${list.name} 操作`}
+                  >
+                    <DropdownMenuItem onSelect={() => onEdit(list)}>重命名</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => onColor(list)}>更改颜色</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onSelect={() => onDelete(list)}>
+                      删除
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </div>
           ))}
@@ -685,9 +743,7 @@ function TaskHeader({
 }) {
   const [titleInput, setTitleInput] = useState("");
   const [searchOpen, setSearchOpen] = useState(Boolean(search));
-  const [sortOpen, setSortOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  const sortRef = useRef<HTMLDivElement>(null);
   const sortOptions: [TaskSort, string][] = [
     ["manual", "手动"],
     ["created_desc", "最新"],
@@ -705,25 +761,17 @@ function TaskHeader({
         window.requestAnimationFrame(() => searchRef.current?.focus());
       }
       if (isImeComposing(event)) return;
-      if (event.key === "Escape" && (searchOpen || sortOpen)) {
+      if (event.key === "Escape" && searchOpen) {
         event.preventDefault();
         event.stopPropagation();
-        setSortOpen(false);
         if (!search) setSearchOpen(false);
       }
     };
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Node && !sortRef.current?.contains(event.target)) {
-        setSortOpen(false);
-      }
-    };
     document.addEventListener("keydown", onKeyDown, true);
-    document.addEventListener("pointerdown", onPointerDown, true);
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
-      document.removeEventListener("pointerdown", onPointerDown, true);
     };
-  }, [search, searchOpen, sortOpen]);
+  }, [search, searchOpen]);
 
   useEffect(() => {
     if (searchOpen) window.requestAnimationFrame(() => searchRef.current?.focus());
@@ -737,48 +785,44 @@ function TaskHeader({
           <span>{count} 个任务</span>
         </div>
         <div className="header-tools">
-          <button
-            className={`icon-button ${searchOpen ? "active" : ""}`}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn("icon-button", searchOpen && "active")}
             type="button"
             onClick={() => setSearchOpen(true)}
             aria-label="展开搜索"
             aria-expanded={searchOpen}
           >
             <Search />
-          </button>
-          <div className="sort-control" ref={sortRef}>
-            <button
-              className={`sort-trigger ${sortOpen ? "active" : ""}`}
-              type="button"
-              onClick={() => setSortOpen((value) => !value)}
-              aria-label="选择排序方式"
-              aria-expanded={sortOpen}
-              aria-haspopup="menu"
-            >
-              <SlidersHorizontal />
-              <span>{currentSortLabel}</span>
-              <ChevronDown />
-            </button>
-            {sortOpen && (
-              <div className="popover sort-popover" role="menu" aria-label="任务排序">
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="sort-trigger"
+                type="button"
+                aria-label="选择排序方式"
+              >
+                <SlidersHorizontal />
+                <span>{currentSortLabel}</span>
+                <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" aria-label="任务排序">
+              <DropdownMenuRadioGroup
+                value={sort}
+                onValueChange={(value) => onSort(value as TaskSort)}
+              >
                 {sortOptions.map(([value, label]) => (
-                  <button
-                    key={value}
-                    role="menuitemradio"
-                    aria-checked={sort === value}
-                    className={sort === value ? "active" : ""}
-                    onClick={() => {
-                      onSort(value);
-                      setSortOpen(false);
-                    }}
-                  >
+                  <DropdownMenuRadioItem key={value} value={value}>
                     {label}
-                    {sort === value && <Check />}
-                  </button>
+                  </DropdownMenuRadioItem>
                 ))}
-              </div>
-            )}
-          </div>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       <form
@@ -792,8 +836,9 @@ function TaskHeader({
         }}
       >
         {createPending ? <LoaderCircle className="spin" /> : <Plus />}
-        <input
+        <Input
           ref={quickAddRef}
+          className="border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
           value={titleInput}
           onChange={(event) => setTitleInput(event.target.value)}
           placeholder="快速添加任务，回车提交"
@@ -802,16 +847,19 @@ function TaskHeader({
       </form>
       {createError && <div className="inline-error">{createError}</div>}
       {searchOpen && (
-        <label className="search-field">
+        <div className="search-field">
           <Search />
-          <input
+          <Input
             ref={searchRef}
+            className="border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
             value={search}
             onChange={(event) => onSearch(event.target.value)}
             placeholder="搜索任务..."
             aria-label="搜索任务"
           />
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             className="icon-button"
             type="button"
             onClick={() => {
@@ -825,8 +873,8 @@ function TaskHeader({
             aria-label={search ? "清除搜索" : "关闭搜索"}
           >
             <X />
-          </button>
-        </label>
+          </Button>
+        </div>
       )}
     </header>
   );
@@ -877,34 +925,31 @@ function TaskListPanel({
       }}
     >
       {tasks.map((task) => (
-        <button
+        <div
           key={task.id}
+          role="button"
+          tabIndex={0}
           className={`task-row ${activeTaskId === task.id ? "active" : ""} ${task.status === 2 ? "completed" : ""}`}
           onClick={() => void onSelect(task.id)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              void onSelect(task.id);
+            }
+          }}
         >
           {view !== "trash" && (
-            <span
-              role="checkbox"
-              aria-checked={task.status === 2}
+            <Checkbox
+              checked={task.status === 2}
               aria-label={task.status === 2 ? "重新打开任务" : "完成任务"}
-              tabIndex={0}
               className={`checkbox task-checkbox ${
                 task.priority > 0 ? `has-priority priority-${task.priority}` : ""
               } ${task.status === 2 ? "checked" : ""}`}
               onClick={(event) => {
                 event.stopPropagation();
-                onToggle(task);
               }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onToggle(task);
-                }
-              }}
-            >
-              {task.status === 2 && <Check />}
-            </span>
+              onCheckedChange={() => onToggle(task)}
+            />
           )}
           <span className="task-title">{task.title}</span>
           <span className="task-meta">
@@ -913,7 +958,7 @@ function TaskListPanel({
             )}
             {task.tags.slice(0, 2).map((tag) => <span className="tag-mini" key={tag.id}>{tag.name}</span>)}
           </span>
-        </button>
+        </div>
       ))}
       {fetchingNext && <div className="next-page"><LoaderCircle className="spin" /> 加载更多</div>}
     </div>
@@ -1023,9 +1068,9 @@ const TaskDetail = forwardRef<EditorHandle, {
     <div className="detail-content">
       <div className="detail-toolbar">
         <span>任务详情</span>
-        <button className="icon-button" onClick={() => void onClose()} aria-label="关闭任务详情"><X /></button>
+        <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => void onClose()} aria-label="关闭任务详情"><X /></Button>
       </div>
-      <input
+      <Input
         className="detail-title-input"
         value={draft.title}
         disabled={readOnly}
@@ -1041,17 +1086,17 @@ const TaskDetail = forwardRef<EditorHandle, {
             disabled={readOnly}
             onChange={(value) => schedule("due_at", value)}
           />
-          <label className="all-day-toggle">
-            <input
-              type="checkbox"
+          <Label className="all-day-toggle">
+            <Checkbox
               checked={draft.is_all_day}
               disabled={readOnly}
-              onChange={(event) => schedule("is_all_day", event.target.checked)}
+              onCheckedChange={(checked) => schedule("is_all_day", checked === true)}
+              aria-label="全天"
             />
             全天
-          </label>
+          </Label>
           {draft.due_at && !readOnly && (
-            <button className="icon-button" onClick={() => { schedule("due_at", null); schedule("reminder_at", null); }} aria-label="清除截止日期"><X /></button>
+            <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => { schedule("due_at", null); schedule("reminder_at", null); }} aria-label="清除截止日期"><X /></Button>
           )}
         </div>
       </DetailField>
@@ -1065,74 +1110,96 @@ const TaskDetail = forwardRef<EditorHandle, {
             onChange={(value) => schedule("reminder_at", value)}
           />
           {draft.reminder_at && !readOnly && (
-            <button className="icon-button" onClick={() => schedule("reminder_at", null)} aria-label="清除提醒时间"><X /></button>
+            <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => schedule("reminder_at", null)} aria-label="清除提醒时间"><X /></Button>
           )}
         </div>
       </DetailField>
       <DetailField label="优先级" icon={<Star />}>
-        <select
-          value={draft.priority}
+        <Select
+          value={String(draft.priority)}
           disabled={readOnly}
-          onChange={(event) => schedule("priority", Number(event.target.value) as 0 | 1 | 3 | 5)}
-          aria-label="优先级"
+          onValueChange={(value) => schedule("priority", Number(value) as 0 | 1 | 3 | 5)}
         >
-          {[0, 1, 3, 5].map((value) => <option key={value} value={value}>{priorityLabels[value as 0 | 1 | 3 | 5]}</option>)}
-        </select>
+          <SelectTrigger className="detail-select" aria-label="优先级">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[0, 1, 3, 5].map((value) => (
+              <SelectItem key={value} value={String(value)}>
+                {priorityLabels[value as 0 | 1 | 3 | 5]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </DetailField>
       <DetailField label="所属清单" icon={<List />}>
-        <select
+        <Select
           value={draft.list_id}
           disabled={readOnly}
-          onChange={(event) => schedule("list_id", event.target.value)}
-          aria-label="所属清单"
+          onValueChange={(value) => schedule("list_id", value)}
         >
-          {lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}
-        </select>
+          <SelectTrigger className="detail-select" aria-label="所属清单">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {lists.map((list) => <SelectItem key={list.id} value={list.id}>{list.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </DetailField>
       <DetailField label="标签" icon={<TagIcon />}>
         <div className="tags-row">
           {draft.tags.map((tag) => (
-            <span className="tag-pill" key={tag.id}>
+            <Badge variant="secondary" className="tag-pill" key={tag.id}>
               <span className="tag-dot" style={{ backgroundColor: tag.color }} />
               {tag.name}
               {!readOnly && (
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => schedule("tag_ids", draft.tags.filter((item) => item.id !== tag.id).map((item) => item.id))}
                   aria-label={`移除标签 ${tag.name}`}
-                ><X /></button>
+                ><X /></Button>
               )}
-            </span>
+            </Badge>
           ))}
-          {!readOnly && <button className="add-tag-button" onClick={() => setTagMenu(!tagMenu)}>+ 添加</button>}
-          {tagMenu && (
-            <TagMenu
-              tags={tags}
-              selected={selectedTagIds}
-              onToggle={(tagId) => {
-                const next = new Set(selectedTagIds);
-                if (next.has(tagId)) next.delete(tagId); else next.add(tagId);
-                schedule("tag_ids", [...next]);
-                setDraft((current) => current ? { ...current, tags: tags.filter((tag) => next.has(tag.id)) } : current);
-              }}
-              onCreated={(tag) => {
-                queryClient.setQueryData<Tag[]>(queryKeys.tags, (old) => [...(old || []), tag]);
-                schedule("tag_ids", [...selectedTagIds, tag.id]);
-                setDraft((current) => current ? { ...current, tags: [...current.tags, tag] } : current);
-              }}
-            />
+          {!readOnly && (
+            <Popover open={tagMenu} onOpenChange={setTagMenu}>
+              <PopoverTrigger asChild>
+                <Button variant="secondary" size="sm" className="add-tag-button">
+                  <Plus /> 添加
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="tag-popover">
+                <TagMenu
+                  tags={tags}
+                  selected={selectedTagIds}
+                  onToggle={(tagId) => {
+                    const next = new Set(selectedTagIds);
+                    if (next.has(tagId)) next.delete(tagId); else next.add(tagId);
+                    schedule("tag_ids", [...next]);
+                    setDraft((current) => current ? { ...current, tags: tags.filter((tag) => next.has(tag.id)) } : current);
+                  }}
+                  onCreated={(tag) => {
+                    queryClient.setQueryData<Tag[]>(queryKeys.tags, (old) => [...(old || []), tag]);
+                    schedule("tag_ids", [...selectedTagIds, tag.id]);
+                    setDraft((current) => current ? { ...current, tags: [...current.tags, tag] } : current);
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
           )}
         </div>
       </DetailField>
-      <label className="detail-block">
+      <Label className="detail-block">
         <span className="field-label">描述</span>
-        <textarea
+        <Textarea
           value={draft.description}
           disabled={readOnly}
           onChange={(event) => schedule("description", event.target.value)}
           placeholder="添加描述..."
           aria-label="任务描述"
         />
-      </label>
+      </Label>
       {!readOnly && (
         <ChecklistEditor
           taskId={draft.id}
@@ -1150,16 +1217,16 @@ const TaskDetail = forwardRef<EditorHandle, {
       <div className="detail-actions">
         {readOnly ? (
           <>
-            <button className="primary-button" onClick={() => onRestore(draft)}><RotateCcw /> 恢复</button>
-            <button className="danger-button" onClick={() => onPermanentDelete(draft)}><Trash2 /> 永久删除</button>
+            <Button className="primary-button" onClick={() => onRestore(draft)}><RotateCcw /> 恢复</Button>
+            <Button variant="destructive" className="danger-button" onClick={() => onPermanentDelete(draft)}><Trash2 /> 永久删除</Button>
           </>
         ) : (
           <>
-            <button className="primary-button" onClick={() => onToggle(draft)}>
+            <Button className="primary-button" onClick={() => onToggle(draft)}>
               {draft.status === 2 ? <RotateCcw /> : <Check />}
               {draft.status === 2 ? "重新打开" : "完成"}
-            </button>
-            <button className="danger-button" onClick={() => onDelete(draft)}><Trash2 /> 删除</button>
+            </Button>
+            <Button variant="ghost" className="danger-button" onClick={() => onDelete(draft)}><Trash2 /> 删除</Button>
           </>
         )}
       </div>
@@ -1182,47 +1249,18 @@ function DateTimePicker({
   max?: string | null;
   onChange: (value: string) => void;
 }) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => monthStart(pickerBaseDate(value, max)));
   const [time, setTime] = useState(() => formatTimeInput(pickerBaseDate(value, max)));
 
-  const openPicker = () => {
-    if (open) {
-      setOpen(false);
-      return;
+  const setPickerOpen = (nextOpen: boolean) => {
+    if (nextOpen) {
+      const baseDate = pickerBaseDate(value, max);
+      setVisibleMonth(monthStart(baseDate));
+      setTime(formatTimeInput(baseDate));
     }
-    const baseDate = pickerBaseDate(value, max);
-    setVisibleMonth(monthStart(baseDate));
-    setTime(formatTimeInput(baseDate));
-    setOpen(true);
+    setOpen(nextOpen);
   };
-
-  useEffect(() => {
-    if (!open) return;
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (isImeComposing(event) || event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("keydown", onKeyDown, true);
-    };
-  }, [open]);
 
   const days = calendarDays(visibleMonth);
   const selectedDate = value ? new Date(value) : null;
@@ -1240,54 +1278,62 @@ function DateTimePicker({
     if (maxDate && selected > maxDate) selected = maxDate;
     onChange(selected.toISOString());
     setOpen(false);
-    triggerRef.current?.focus();
   };
 
   return (
-    <div className="date-picker" ref={rootRef}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={`date-trigger ${value ? "" : "placeholder"}`}
-        disabled={disabled}
-        aria-label={label}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={openPicker}
-      >
-        {formatPickerValue(value, allDay)}
-      </button>
-      {open && (
-        <div className="date-picker-popover" role="dialog" aria-label={`${label}选择器`}>
+    <div className="date-picker">
+      <Popover open={open} onOpenChange={setPickerOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            className={cn("date-trigger", !value && "placeholder")}
+            disabled={disabled}
+            aria-label={label}
+          >
+            {formatPickerValue(value, allDay)}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="date-picker-popover"
+          align="start"
+          role="dialog"
+          aria-label={`${label}选择器`}
+          onEscapeKeyDown={(event) => event.stopPropagation()}
+        >
           <div className="date-picker-header">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               className="icon-button"
               onClick={() => setVisibleMonth((current) => addMonths(current, -1))}
               aria-label="上个月"
             >
               <ChevronLeft />
-            </button>
+            </Button>
             <strong>{visibleMonth.getFullYear()}年{visibleMonth.getMonth() + 1}月</strong>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               className="icon-button"
               onClick={() => setVisibleMonth((current) => addMonths(current, 1))}
               aria-label="下个月"
             >
               <ChevronRight />
-            </button>
+            </Button>
           </div>
           {!allDay && (
-            <label className="date-picker-time">
+            <Label className="date-picker-time">
               时间
-              <input
+              <Input
                 type="time"
                 value={time}
                 onChange={(event) => setTime(event.target.value)}
                 aria-label={`${label}时间`}
               />
-            </label>
+            </Label>
           )}
           <div className="date-picker-weekdays" aria-hidden="true">
             {weekDayLabels.map((day) => <span key={day}>{day}</span>)}
@@ -1298,8 +1344,10 @@ function DateTimePicker({
               const selected = selectedDate ? isSameLocalDay(day, selectedDate) : false;
               const unavailable = maxDate ? isLocalDayAfter(day, maxDate) : false;
               return (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   className={[
                     "date-picker-day",
                     outsideMonth ? "outside-month" : "",
@@ -1312,12 +1360,12 @@ function DateTimePicker({
                   onClick={() => selectDate(day)}
                 >
                   {day.getDate()}
-                </button>
+                </Button>
               );
             })}
           </div>
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -1355,22 +1403,24 @@ function ChecklistEditor({
       <div className="field-label">检查项 ({items.filter((item) => item.is_completed).length}/{items.length})</div>
       {ordered.map((item, index) => (
         <div className={`checklist-item ${item.is_completed ? "completed" : ""}`} key={item.id}>
-          <button
+          <Checkbox
+            checked={item.is_completed}
             className={`checkbox ${item.is_completed ? "checked" : ""}`}
             aria-label={item.is_completed ? "取消完成检查项" : "完成检查项"}
-            onClick={() => mutation.mutate(() => api.updateItem(taskId, item.id, { is_completed: !item.is_completed }))}
-          >{item.is_completed && <Check />}</button>
-          <input
+            onCheckedChange={() => mutation.mutate(() => api.updateItem(taskId, item.id, { is_completed: !item.is_completed }))}
+          />
+          <Input
             defaultValue={item.title}
+            className="checklist-title-input"
             aria-label="检查项标题"
             onBlur={(event) => {
               const title = event.target.value.trim();
               if (title && title !== item.title) mutation.mutate(() => api.updateItem(taskId, item.id, { title }));
             }}
           />
-          <button className="icon-button" disabled={index === 0} onClick={() => move(index, -1)} aria-label="上移检查项"><ArrowUp /></button>
-          <button className="icon-button" disabled={index === ordered.length - 1} onClick={() => move(index, 1)} aria-label="下移检查项"><ArrowDown /></button>
-          <button className="icon-button danger-text" onClick={() => mutation.mutate(() => api.deleteItem(taskId, item.id))} aria-label="删除检查项"><X /></button>
+          <Button variant="ghost" size="icon-sm" className="icon-button" disabled={index === 0} onClick={() => move(index, -1)} aria-label="上移检查项"><ArrowUp /></Button>
+          <Button variant="ghost" size="icon-sm" className="icon-button" disabled={index === ordered.length - 1} onClick={() => move(index, 1)} aria-label="下移检查项"><ArrowDown /></Button>
+          <Button variant="ghost" size="icon-sm" className="icon-button danger-text" onClick={() => mutation.mutate(() => api.deleteItem(taskId, item.id))} aria-label="删除检查项"><X /></Button>
         </div>
       ))}
       <form
@@ -1384,7 +1434,13 @@ function ChecklistEditor({
         }}
       >
         <Plus />
-        <input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="添加检查项" aria-label="添加检查项" />
+        <Input
+          className="add-checklist-input"
+          value={newTitle}
+          onChange={(event) => setNewTitle(event.target.value)}
+          placeholder="添加检查项"
+          aria-label="添加检查项"
+        />
       </form>
       {mutation.isError && <div className="inline-error">{errorMessage(mutation.error)}</div>}
     </section>
@@ -1408,17 +1464,17 @@ function TagMenu({
     onSuccess: (tag) => { setName(""); onCreated(tag); },
   });
   return (
-    <div className="popover tag-popover">
+    <div className="tag-menu">
       {tags.map((tag) => (
-        <label key={tag.id}>
-          <input type="checkbox" checked={selected.has(tag.id)} onChange={() => onToggle(tag.id)} />
+        <Label key={tag.id} className="tag-menu-item">
+          <Checkbox checked={selected.has(tag.id)} onCheckedChange={() => onToggle(tag.id)} />
           <span className="tag-dot" style={{ backgroundColor: tag.color }} />
           {tag.name}
-        </label>
+        </Label>
       ))}
       <form onSubmit={(event) => { event.preventDefault(); if (name.trim()) create.mutate(); }}>
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="新标签名称" maxLength={50} />
-        <button className="icon-button" aria-label="创建标签"><Plus /></button>
+        <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="新标签名称" maxLength={50} />
+        <Button variant="ghost" size="icon-sm" className="icon-button" aria-label="创建标签"><Plus /></Button>
       </form>
       {create.isError && <div className="inline-error">{errorMessage(create.error)}</div>}
     </div>
@@ -1441,7 +1497,7 @@ function SaveStatus({ state, error, onRetry }: { state: string; error: string; o
   if (state === "saved") return <div className="save-status saved"><Check /> 已保存</div>;
   if (state === "saving") return <div className="save-status saving"><LoaderCircle className="spin" /> 保存中</div>;
   if (state === "dirty") return <div className="save-status dirty"><span /> 已修改</div>;
-  return <div className="save-status error"><CircleAlert /> {error}<button onClick={onRetry}>重试</button></div>;
+  return <div className="save-status error"><CircleAlert /> {error}<Button variant="link" size="sm" onClick={onRetry}>重试</Button></div>;
 }
 
 function DeletedLists({ lists, onRestore, onDelete }: { lists: TaskList[]; onRestore: (id: string) => void; onDelete: (list: TaskList) => void }) {
@@ -1452,44 +1508,133 @@ function DeletedLists({ lists, onRestore, onDelete }: { lists: TaskList[]; onRes
         <div key={list.id}>
           <span className="list-dot" style={{ backgroundColor: list.color }} />
           <span>{list.name}</span>
-          <button onClick={() => onRestore(list.id)}><RotateCcw /> 恢复</button>
-          <button className="danger-text" onClick={() => onDelete(list)}><Trash2 /> 永久删除</button>
+          <Button variant="ghost" size="sm" onClick={() => onRestore(list.id)}><RotateCcw /> 恢复</Button>
+          <Button variant="ghost" size="sm" className="danger-text" onClick={() => onDelete(list)}><Trash2 /> 永久删除</Button>
         </div>
       ))}
     </section>
   );
 }
 
-function NewListDialog({ onClose, onSubmit }: { onClose: () => void; onSubmit: (name: string, color: string) => void }) {
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(tagColors[0]);
+function ListDialog({
+  mode,
+  list,
+  onClose,
+  onSubmit,
+}: {
+  mode: "create" | "rename" | "color";
+  list?: TaskList;
+  onClose: () => void;
+  onSubmit: (values: { name: string; color: string }) => Promise<void>;
+}) {
+  const [name, setName] = useState(list?.name || "");
+  const [color, setColor] = useState(list?.color || tagColors[0]);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const title =
+    mode === "create" ? "新建清单" : mode === "rename" ? "重命名清单" : "更改清单颜色";
+  const description =
+    mode === "create"
+      ? "创建一个清单来组织相关任务。"
+      : mode === "rename"
+        ? "输入新的清单名称。"
+        : "选择一个便于识别的清单颜色。";
+
+  const submit = async () => {
+    const cleaned = name.trim();
+    if (!cleaned || !/^#[0-9a-f]{6}$/i.test(color)) return;
+    setPending(true);
+    setError("");
+    try {
+      await onSubmit({ name: cleaned, color });
+    } catch (submitError) {
+      setPending(false);
+      setError(errorMessage(submitError));
+    }
+  };
+
   return (
-    <div className="dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-      <form className="dialog new-list-dialog" onSubmit={(event) => { event.preventDefault(); if (name.trim()) onSubmit(name.trim(), color); }}>
-        <h2>新建清单</h2>
-        <label>名称<input autoFocus value={name} onChange={(event) => setName(event.target.value)} maxLength={100} /></label>
-        <label>颜色<input type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label>
-        <div className="dialog-actions">
-          <button type="button" className="secondary-button" onClick={onClose}>取消</button>
-          <button className="primary-button" disabled={!name.trim()}>创建</button>
-        </div>
-      </form>
-    </div>
+    <Dialog open onOpenChange={(open) => { if (!open && !pending) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <form
+          className="list-dialog-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          {mode !== "color" && (
+            <div className="form-field">
+              <Label htmlFor="list-name">名称</Label>
+              <Input
+                id="list-name"
+                autoFocus
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                maxLength={100}
+                placeholder="例如：工作、购物、学习"
+              />
+            </div>
+          )}
+          {mode !== "rename" && (
+            <div className="form-field">
+              <Label>颜色</Label>
+              <div className="color-options">
+                {tagColors.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={cn("color-option", color === option && "selected")}
+                    style={{ backgroundColor: option }}
+                    onClick={() => setColor(option)}
+                    aria-label={`选择颜色 ${option}`}
+                    aria-pressed={color === option}
+                  />
+                ))}
+                <Input
+                  type="color"
+                  className="color-input"
+                  value={color}
+                  onChange={(event) => setColor(event.target.value)}
+                  aria-label="自定义清单颜色"
+                />
+              </div>
+            </div>
+          )}
+          {error && <div className="inline-error">{error}</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
+              取消
+            </Button>
+            <Button type="submit" disabled={!name.trim() || pending}>
+              {pending && <LoaderCircle className="spin" />}
+              {mode === "create" ? "创建" : "保存"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function ConfirmDialog({ title, message, onCancel, onConfirm }: { title: string; message: string; onCancel: () => void; onConfirm: () => void }) {
   return (
-    <div className="dialog-overlay" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
-      <div className="dialog">
-        <h2 id="confirm-title">{title}</h2>
-        <p>{message}</p>
-        <div className="dialog-actions">
-          <button className="secondary-button" onClick={onCancel}>取消</button>
-          <button className="danger-button" onClick={onConfirm}>确认</button>
-        </div>
-      </div>
-    </div>
+    <AlertDialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{message}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>确认</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -1508,7 +1653,7 @@ function ConnectionError({ message, onRetry, pending }: { message: string; onRet
       <h1>无法连接到服务</h1>
       <p>{message}</p>
       <p>请确认 API 服务已启动并运行在 http://127.0.0.1:8000</p>
-      <button className="primary-button" onClick={onRetry} disabled={pending}>{pending ? <LoaderCircle className="spin" /> : <RefreshCw />} 重试连接</button>
+      <Button className="primary-button" onClick={onRetry} disabled={pending}>{pending ? <LoaderCircle className="spin" /> : <RefreshCw />} 重试连接</Button>
     </div>
   );
 }

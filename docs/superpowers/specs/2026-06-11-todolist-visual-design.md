@@ -7,6 +7,13 @@
 
 **温和舒展** — 保留工具型产品的清晰结构，通过更大的阅读字号、克制的柔和蓝、轻量字段行和响应式分栏降低长时间使用的视觉疲劳。
 
+### 1.1 UI 技术实现
+
+- 使用 Tailwind CSS 4 提供设计 token 与原子样式能力。
+- 使用 shadcn/ui 的本地组件模式，组件源码位于 `desktop/src/components/ui`。
+- 交互 primitives 使用 Radix UI，统一处理 Portal、焦点管理、键盘导航和弹层定位。
+- 应用特有的三栏布局、任务优先级和日期网格保留在 `desktop/src/styles.css`。
+
 ## 2. 配色方案
 
 | 角色 | 色值 | 用途 |
