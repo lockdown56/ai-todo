@@ -63,12 +63,26 @@ describe("Todo List app", () => {
     renderApp();
 
     const checkbox = await screen.findByRole("checkbox", { name: "完成任务" });
+    expect(checkbox).toHaveClass("task-checkbox", "has-priority", "priority-3");
     await user.click(checkbox);
 
     expect(await screen.findByRole("checkbox", { name: "重新打开任务" })).toHaveAttribute(
       "aria-checked",
       "true",
     );
+  });
+
+  it("updates the task checkbox color immediately when priority changes", async () => {
+    const user = userEvent.setup();
+    renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
+
+    const checkbox = await screen.findByRole("checkbox", { name: "完成任务" });
+    expect(checkbox).toHaveClass("priority-3");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "优先级" }), "5");
+
+    expect(checkbox).toHaveClass("priority-5");
+    expect(checkbox).not.toHaveClass("priority-3");
   });
 
   it("debounces search before requesting filtered tasks", async () => {

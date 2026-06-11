@@ -93,18 +93,18 @@ input::placeholder, textarea::placeholder { color: #bbb; }
 .task-row { display: flex; align-items: center; width: 100%; min-height: 43px; gap: 11px; padding: 7px 12px; border: 1px solid transparent; border-radius: 6px; background: transparent; cursor: pointer; text-align: left; transition: background 140ms ease-out; }
 .task-row:hover { background: #fafafe; }
 .task-row.active { border-color: #e9e5fb; background: var(--primary-light); }
-.checkbox { display: inline-grid; place-items: center; width: 17px; height: 17px; flex: 0 0 auto; padding: 0; border: 2px solid #d0d0da; border-radius: 4px; color: transparent; background: transparent; cursor: pointer; }
-.checkbox:hover { border-color: var(--primary); }
-.checkbox.checked { color: white; border-color: var(--primary); background: var(--primary); }
+.checkbox { --checkbox-accent: var(--primary); display: inline-grid; place-items: center; width: 17px; height: 17px; flex: 0 0 auto; padding: 0; border: 2px solid #d0d0da; border-radius: 4px; color: transparent; background: transparent; cursor: pointer; }
+.checkbox:hover { border-color: var(--checkbox-accent); }
+.checkbox.checked { color: white; border-color: var(--checkbox-accent); background: var(--checkbox-accent); }
 .checkbox svg { width: 11px; height: 11px; stroke-width: 3; }
+.task-checkbox.priority-1 { --checkbox-accent: #4f8ef7; }
+.task-checkbox.priority-3 { --checkbox-accent: #f0c45a; }
+.task-checkbox.priority-5 { --checkbox-accent: #e67e3a; }
+.task-checkbox.has-priority { border-color: var(--checkbox-accent); }
 .task-title { min-width: 0; flex: 1; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .task-row.completed .task-title { color: var(--muted); text-decoration: line-through; }
 .task-meta { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
 .task-date { color: #d66f35; font-size: 10px; }
-.priority { width: 7px; height: 7px; border-radius: 50%; }
-.priority-1 { background: #4f8ef7; }
-.priority-3 { background: #f0c45a; }
-.priority-5 { background: #e67e3a; }
 .tag-mini { max-width: 72px; overflow: hidden; padding: 2px 7px; border-radius: 12px; color: #666; background: #f0f0f4; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .next-page { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 14px; color: var(--muted); font-size: 11px; }
 

@@ -1,4 +1,5 @@
 import {
+  type InfiniteData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -49,6 +50,7 @@ import type {
   Tag,
   Task,
   TaskList,
+  TaskPage,
   TaskPatch,
   TaskSort,
   TaskView,
@@ -100,6 +102,31 @@ function invalidateTaskData(queryClient: ReturnType<typeof useQueryClient>, task
   void queryClient.invalidateQueries({ queryKey: ["tasks"] });
   void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
   if (taskId) void queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) });
+}
+
+function updateTaskListCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  taskId: string,
+  patch: Partial<Task>,
+) {
+  queryClient.setQueriesData<InfiniteData<TaskPage>>(
+    { queryKey: ["tasks"] },
+    (data) => {
+      if (!data) return data;
+      let changed = false;
+      const pages = data.pages.map((page) => {
+        let pageChanged = false;
+        const items = page.items.map((task) => {
+          if (task.id !== taskId) return task;
+          changed = true;
+          pageChanged = true;
+          return { ...task, ...patch };
+        });
+        return pageChanged ? { ...page, items } : page;
+      });
+      return changed ? { ...data, pages } : data;
+    },
+  );
 }
 
 function Shell() {
@@ -691,7 +718,9 @@ function TaskListPanel({
               aria-checked={task.status === 2}
               aria-label={task.status === 2 ? "重新打开任务" : "完成任务"}
               tabIndex={0}
-              className={`checkbox ${task.status === 2 ? "checked" : ""}`}
+              className={`checkbox task-checkbox ${
+                task.priority > 0 ? `has-priority priority-${task.priority}` : ""
+              } ${task.status === 2 ? "checked" : ""}`}
               onClick={(event) => {
                 event.stopPropagation();
                 onToggle(task);
@@ -710,7 +739,6 @@ function TaskListPanel({
           <span className="task-title">{task.title}</span>
           <span className="task-meta">
             {task.due_at && <span className="task-date">{formatDue(task)}</span>}
-            {task.priority > 0 && <span className={`priority priority-${task.priority}`} />}
             {task.tags.slice(0, 2).map((tag) => <span className="tag-mini" key={tag.id}>{tag.name}</span>)}
           </span>
         </button>
@@ -783,6 +811,11 @@ const TaskDetail = forwardRef<EditorHandle, {
 
   const schedule = <K extends keyof TaskPatch>(key: K, value: TaskPatch[K]) => {
     setDraft((current) => current ? { ...current, [key]: value } as Task : current);
+    if (key === "priority") {
+      updateTaskListCache(queryClient, taskIdRef.current, {
+        priority: value as Task["priority"],
+      });
+    }
     pendingRef.current = { ...pendingRef.current, [key]: value };
     setSaveState("dirty");
     window.clearTimeout(timerRef.current);
