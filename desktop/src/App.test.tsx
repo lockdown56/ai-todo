@@ -23,6 +23,15 @@ function renderApp(path = "/view/inbox") {
   );
 }
 
+function setWindowWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
 describe("Todo List app", () => {
   it("renders the three-column shell and persists sidebar collapse", async () => {
     const user = userEvent.setup();
@@ -99,9 +108,57 @@ describe("Todo List app", () => {
     const user = userEvent.setup();
     renderApp();
 
+    await user.click(await screen.findByRole("button", { name: "展开搜索" }));
     await user.type(await screen.findByRole("textbox", { name: "搜索任务" }), "测试");
     await waitFor(() => expect(requestedQueries).toContain("测试"), { timeout: 1200 });
     expect(requestedQueries.filter((query) => query === "测试")).toHaveLength(1);
+  });
+
+  it("opens the sort menu and updates the active sort", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    const trigger = await screen.findByRole("button", { name: "选择排序方式" });
+    expect(trigger).toHaveTextContent("手动");
+
+    await user.click(trigger);
+    await user.click(screen.getByRole("menuitemradio", { name: "优先级" }));
+
+    expect(trigger).toHaveTextContent("优先级");
+    expect(screen.queryByRole("menu", { name: "任务排序" })).not.toBeInTheDocument();
+  });
+
+  it("auto-collapses the sidebar at medium widths without changing the saved preference", async () => {
+    setWindowWidth(1200);
+    const user = userEvent.setup();
+    const { container } = renderApp();
+
+    await screen.findByRole("heading", { name: "收集箱" });
+    const shell = container.querySelector(".app-shell");
+    expect(shell).toHaveClass("compact-sidebar", "sidebar-collapsed");
+
+    await user.click(screen.getByRole("button", { name: "展开侧栏" }));
+    expect(shell).toHaveClass("sidebar-overlay-open");
+    expect(localStorage.getItem("todo-sidebar-collapsed")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "今天" }));
+    expect(await screen.findByRole("heading", { name: "今天" })).toBeInTheDocument();
+    expect(shell).not.toHaveClass("sidebar-overlay-open");
+  });
+
+  it("uses a dismissible detail drawer at narrow widths", async () => {
+    setWindowWidth(1000);
+    const user = userEvent.setup();
+    const { container } = renderApp(
+      "/view/inbox?task=00000000-0000-4000-8000-000000000100",
+    );
+
+    expect(await screen.findByText("任务详情")).toBeInTheDocument();
+    expect(container.querySelector(".app-shell")).toHaveClass("detail-drawer");
+
+    await user.click(screen.getByRole("button", { name: "关闭详情抽屉" }));
+
+    expect(screen.queryByText("任务详情")).not.toBeInTheDocument();
   });
 
   it("autosaves the title after 500ms", async () => {

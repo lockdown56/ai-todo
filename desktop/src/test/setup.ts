@@ -7,6 +7,11 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => {
   resetMockData();
   localStorage.clear();
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: 1440,
+  });
 });
 afterEach(() => {
   cleanup();

@@ -15,6 +15,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -27,6 +28,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  SlidersHorizontal,
   Star,
   Tag as TagIcon,
   Trash2,
@@ -73,7 +75,7 @@ const viewIcons = {
 };
 
 const priorityLabels = { 0: "无", 1: "低", 3: "中", 5: "高" };
-const tagColors = ["#6C5CE7", "#4F8EF7", "#F0C45A", "#E67E3A", "#44A06B", "#D95550"];
+const tagColors = ["#4F6FAE", "#5F7FB6", "#C08A32", "#C96F43", "#4F8A68", "#B65B62"];
 const weekDayLabels = ["一", "二", "三", "四", "五", "六", "日"];
 
 interface Scope {
@@ -96,6 +98,16 @@ function useDebouncedValue<T>(value: T, delay: number): T {
     return () => window.clearTimeout(timer);
   }, [delay, value]);
   return debounced;
+}
+
+function useWindowWidth(): number {
+  const [width, setWidth] = useState(() => window.innerWidth || 1440);
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return width;
 }
 
 function invalidateTaskData(queryClient: ReturnType<typeof useQueryClient>, taskId?: string) {
@@ -136,10 +148,13 @@ function Shell() {
   const queryClient = useQueryClient();
   const editorRef = useRef<EditorHandle>(null);
   const quickAddRef = useRef<HTMLInputElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const windowWidth = useWindowWidth();
+  const compactSidebar = windowWidth < 1280;
+  const detailDrawer = windowWidth < 1120;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("todo-sidebar-collapsed") === "true",
   );
+  const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
   const [sort, setSort] = useState<TaskSort>("manual");
@@ -192,16 +207,26 @@ function Shell() {
   const currentList = lists.data?.find((item) => item.id === scope.listId);
   const currentTitle = scope.listId ? currentList?.name || "清单" : viewNames[scope.view || "inbox"];
 
-  const setCollapsed = () => {
+  const toggleSidebar = () => {
+    if (compactSidebar) {
+      setSidebarOverlayOpen((value) => !value);
+      return;
+    }
     setSidebarCollapsed((value) => {
       localStorage.setItem("todo-sidebar-collapsed", String(!value));
       return !value;
     });
   };
+  const effectiveSidebarCollapsed = compactSidebar ? !sidebarOverlayOpen : sidebarCollapsed;
+
+  useEffect(() => {
+    if (!compactSidebar) setSidebarOverlayOpen(false);
+  }, [compactSidebar]);
 
   const navigateAfterFlush = useCallback(
     async (target: string) => {
       if (editorRef.current && !(await editorRef.current.flush())) return;
+      setSidebarOverlayOpen(false);
       navigate(target);
     },
     [navigate],
@@ -229,18 +254,18 @@ function Shell() {
         event.preventDefault();
         quickAddRef.current?.focus();
       }
-      if (event.ctrlKey && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        searchRef.current?.focus();
-      }
       if (event.key === "Escape") {
         event.preventDefault();
+        if (sidebarOverlayOpen) {
+          setSidebarOverlayOpen(false);
+          return;
+        }
         void closeDetail();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [closeDetail]);
+  }, [closeDetail, sidebarOverlayOpen]);
 
   const createTask = useMutation({
     mutationFn: (title: string) =>
@@ -319,15 +344,18 @@ function Shell() {
       <div
         className={[
           "app-shell",
-          sidebarCollapsed ? "sidebar-collapsed" : "",
+          effectiveSidebarCollapsed ? "sidebar-collapsed" : "",
+          compactSidebar ? "compact-sidebar" : "",
+          sidebarOverlayOpen ? "sidebar-overlay-open" : "",
+          detailDrawer ? "detail-drawer" : "",
           selectedTaskId ? "" : "detail-hidden",
         ].join(" ")}
       >
         <Sidebar
-          collapsed={sidebarCollapsed}
+          collapsed={effectiveSidebarCollapsed}
           lists={lists.data || []}
           scope={scope}
-          onToggle={setCollapsed}
+          onToggle={toggleSidebar}
           onNavigate={navigateAfterFlush}
           onAdd={() => setNewListOpen(true)}
           onEdit={(list) => {
@@ -358,13 +386,19 @@ function Shell() {
             })
           }
         />
+        {compactSidebar && sidebarOverlayOpen && (
+          <button
+            className="sidebar-backdrop"
+            onClick={() => setSidebarOverlayOpen(false)}
+            aria-label="关闭侧栏"
+          />
+        )}
         <main className="middle-panel">
           <TaskHeader
             title={currentTitle}
             count={taskItems.length}
             search={search}
             sort={sort}
-            searchRef={searchRef}
             quickAddRef={quickAddRef}
             createPending={createTask.isPending}
             createError={createTask.error ? errorMessage(createTask.error) : null}
@@ -413,6 +447,13 @@ function Shell() {
             }
           />
         </main>
+        {detailDrawer && selectedTaskId && (
+          <button
+            className="detail-backdrop"
+            onClick={() => void closeDetail()}
+            aria-label="关闭详情抽屉"
+          />
+        )}
         <aside className="detail-panel">
           {selectedTaskId ? (
             <TaskDetail
@@ -587,7 +628,6 @@ function TaskHeader({
   count,
   search,
   sort,
-  searchRef,
   quickAddRef,
   createPending,
   createError,
@@ -599,7 +639,6 @@ function TaskHeader({
   count: number;
   search: string;
   sort: TaskSort;
-  searchRef: React.RefObject<HTMLInputElement | null>;
   quickAddRef: React.RefObject<HTMLInputElement | null>;
   createPending: boolean;
   createError: string | null;
@@ -608,22 +647,102 @@ function TaskHeader({
   onCreate: (title: string) => void;
 }) {
   const [titleInput, setTitleInput] = useState("");
+  const [searchOpen, setSearchOpen] = useState(Boolean(search));
+  const [sortOpen, setSortOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const sortRef = useRef<HTMLDivElement>(null);
+  const sortOptions: [TaskSort, string][] = [
+    ["manual", "手动"],
+    ["created_desc", "最新"],
+    ["created_asc", "最早"],
+    ["due_asc", "截止"],
+    ["priority_desc", "优先级"],
+  ];
+  const currentSortLabel = sortOptions.find(([value]) => value === sort)?.[1] || "手动";
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setSearchOpen(true);
+        window.requestAnimationFrame(() => searchRef.current?.focus());
+      }
+      if (event.key === "Escape" && (searchOpen || sortOpen)) {
+        event.preventDefault();
+        event.stopPropagation();
+        setSortOpen(false);
+        if (!search) setSearchOpen(false);
+      }
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !sortRef.current?.contains(event.target)) {
+        setSortOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("pointerdown", onPointerDown, true);
+    };
+  }, [search, searchOpen, sortOpen]);
+
+  useEffect(() => {
+    if (searchOpen) window.requestAnimationFrame(() => searchRef.current?.focus());
+  }, [searchOpen]);
+
   return (
     <header className="middle-header">
       <div className="title-row">
-        <h1>{title}</h1>
-        <span>{count} 个任务</span>
+        <div>
+          <h1>{title}</h1>
+          <span>{count} 个任务</span>
+        </div>
+        <div className="header-tools">
+          <button
+            className={`icon-button ${searchOpen ? "active" : ""}`}
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            aria-label="展开搜索"
+            aria-expanded={searchOpen}
+          >
+            <Search />
+          </button>
+          <div className="sort-control" ref={sortRef}>
+            <button
+              className={`sort-trigger ${sortOpen ? "active" : ""}`}
+              type="button"
+              onClick={() => setSortOpen((value) => !value)}
+              aria-label="选择排序方式"
+              aria-expanded={sortOpen}
+              aria-haspopup="menu"
+            >
+              <SlidersHorizontal />
+              <span>{currentSortLabel}</span>
+              <ChevronDown />
+            </button>
+            {sortOpen && (
+              <div className="popover sort-popover" role="menu" aria-label="任务排序">
+                {sortOptions.map(([value, label]) => (
+                  <button
+                    key={value}
+                    role="menuitemradio"
+                    aria-checked={sort === value}
+                    className={sort === value ? "active" : ""}
+                    onClick={() => {
+                      onSort(value);
+                      setSortOpen(false);
+                    }}
+                  >
+                    {label}
+                    {sort === value && <Check />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-      <label className="search-field">
-        <Search />
-        <input
-          ref={searchRef}
-          value={search}
-          onChange={(event) => onSearch(event.target.value)}
-          placeholder="搜索任务..."
-          aria-label="搜索任务"
-        />
-      </label>
       <form
         className="quick-add"
         onSubmit={(event) => {
@@ -644,24 +763,33 @@ function TaskHeader({
         />
       </form>
       {createError && <div className="inline-error">{createError}</div>}
-      <div className="sort-bar" aria-label="任务排序">
-        <span>排序:</span>
-        {[
-          ["manual", "手动"],
-          ["created_desc", "最新"],
-          ["created_asc", "最早"],
-          ["due_asc", "截止"],
-          ["priority_desc", "优先级"],
-        ].map(([value, label]) => (
+      {searchOpen && (
+        <label className="search-field">
+          <Search />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder="搜索任务..."
+            aria-label="搜索任务"
+          />
           <button
-            key={value}
-            className={sort === value ? "active" : ""}
-            onClick={() => onSort(value as TaskSort)}
+            className="icon-button"
+            type="button"
+            onClick={() => {
+              if (search) {
+                onSearch("");
+                searchRef.current?.focus();
+              } else {
+                setSearchOpen(false);
+              }
+            }}
+            aria-label={search ? "清除搜索" : "关闭搜索"}
           >
-            {label}
+            <X />
           </button>
-        ))}
-      </div>
+        </label>
+      )}
     </header>
   );
 }
@@ -742,7 +870,9 @@ function TaskListPanel({
           )}
           <span className="task-title">{task.title}</span>
           <span className="task-meta">
-            {task.due_at && <span className="task-date">{formatDue(task)}</span>}
+            {task.due_at && (
+              <span className={`task-date ${dueDateTone(task)}`}>{formatDue(task)}</span>
+            )}
             {task.tags.slice(0, 2).map((tag) => <span className="tag-mini" key={tag.id}>{tag.name}</span>)}
           </span>
         </button>
@@ -769,19 +899,22 @@ const TaskDetail = forwardRef<EditorHandle, {
   const queryClient = useQueryClient();
   const taskQuery = useQuery({ queryKey: queryKeys.task(taskId), queryFn: () => api.task(taskId) });
   const [draft, setDraft] = useState<Task | null>(null);
-  const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving" | "error">("saved");
+  const [saveState, setSaveState] = useState<"idle" | "saved" | "dirty" | "saving" | "error">("idle");
   const [saveError, setSaveError] = useState("");
   const [tagMenu, setTagMenu] = useState(false);
   const pendingRef = useRef<TaskPatch>({});
   const timerRef = useRef<number | undefined>(undefined);
   const taskIdRef = useRef(taskId);
+  const loadedTaskIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     taskIdRef.current = taskId;
     if (taskQuery.data) {
+      const isNewTask = loadedTaskIdRef.current !== taskId;
+      loadedTaskIdRef.current = taskId;
       setDraft(taskQuery.data);
       pendingRef.current = {};
-      setSaveState("saved");
+      if (isNewTask) setSaveState("idle");
     }
   }, [taskId, taskQuery.data]);
 
@@ -1153,9 +1286,10 @@ function DateTimePicker({
 
 function DetailField({ label, icon, children }: { label: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="detail-block">
-      <span className="field-label">{label}</span>
-      <div className="field-control"><span className="field-icon">{icon}</span>{children}</div>
+    <div className="detail-field">
+      <span className="field-icon">{icon}</span>
+      <span className="detail-field-label">{label}</span>
+      <div className="detail-field-value">{children}</div>
     </div>
   );
 }
@@ -1254,6 +1388,18 @@ function TagMenu({
 }
 
 function SaveStatus({ state, error, onRetry }: { state: string; error: string; onRetry: () => void }) {
+  const [showSaved, setShowSaved] = useState(false);
+  useEffect(() => {
+    if (state !== "saved") {
+      setShowSaved(false);
+      return;
+    }
+    setShowSaved(true);
+    const timer = window.setTimeout(() => setShowSaved(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [state]);
+
+  if (state === "idle" || (state === "saved" && !showSaved)) return null;
   if (state === "saved") return <div className="save-status saved"><Check /> 已保存</div>;
   if (state === "saving") return <div className="save-status saving"><LoaderCircle className="spin" /> 保存中</div>;
   if (state === "dirty") return <div className="save-status dirty"><span /> 已修改</div>;
@@ -1335,6 +1481,17 @@ function formatDue(task: Task): string {
   return new Intl.DateTimeFormat("zh-CN", task.is_all_day
     ? { month: "numeric", day: "numeric" }
     : { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function dueDateTone(task: Task): string {
+  if (!task.due_at || task.status === 2) return "";
+  const due = new Date(task.due_at);
+  const today = new Date();
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  if (dueDay < todayDay) return "overdue";
+  if (dueDay === todayDay) return "due-today";
+  return "";
 }
 
 function pickerBaseDate(value: string | null, max: string | null): Date {

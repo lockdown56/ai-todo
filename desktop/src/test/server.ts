@@ -7,7 +7,7 @@ const now = "2026-06-11T08:00:00Z";
 export const inbox: TaskList = {
   id: "00000000-0000-4000-8000-000000000010",
   name: "收集箱",
-  color: "#6C5CE7",
+  color: "#4F6FAE",
   system_type: "inbox",
   sort_order: 1024,
   task_count: 1,
