@@ -243,11 +243,13 @@
 }
 
 .custom-lists {
-  max-height: calc(100vh - 330px);
+  min-height: 0;
+  flex: 1;
   overflow-y: auto;
 }
 
 .sidebar-settings {
+  flex: 0 0 auto;
   margin-top: auto;
 }
 
