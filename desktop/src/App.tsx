@@ -60,6 +60,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -669,6 +675,27 @@ function Shell() {
             onCreateNext={createInlineTask}
             onDeleteEmpty={deleteInlineTask}
             onClearSelection={closeDetail}
+            onDelete={(task) =>
+              setConfirm({
+                title: "删除任务",
+                message: "任务将进入回收站，你可以稍后恢复。",
+                action: () => {
+                  setConfirm(null);
+                  deleteTaskMutation.mutate(task.id);
+                },
+              })
+            }
+            onRestore={(task) => restoreTaskMutation.mutate(task.id)}
+            onPermanentDelete={(task) =>
+              setConfirm({
+                title: "永久删除任务",
+                message: "任务、检查项和标签关联将被永久删除，此操作不可撤销。",
+                action: () => {
+                  setConfirm(null);
+                  permanentTaskMutation.mutate(task.id);
+                },
+              })
+            }
             onToggle={(task) =>
               stateMutation.mutate({
                 task,
@@ -693,33 +720,6 @@ function Shell() {
               tags={tags.data || []}
               onClose={closeDetail}
               onDataChanged={() => invalidateTaskData(queryClient, selectedTaskId)}
-              onDelete={(task) =>
-                setConfirm({
-                  title: "删除任务",
-                  message: "任务将进入回收站，你可以稍后恢复。",
-                  action: () => {
-                    setConfirm(null);
-                    deleteTaskMutation.mutate(task.id);
-                  },
-                })
-              }
-              onRestore={(task) => restoreTaskMutation.mutate(task.id)}
-              onPermanentDelete={(task) =>
-                setConfirm({
-                  title: "永久删除任务",
-                  message: "任务、检查项和标签关联将被永久删除，此操作不可撤销。",
-                  action: () => {
-                    setConfirm(null);
-                    permanentTaskMutation.mutate(task.id);
-                  },
-                })
-              }
-              onToggle={(task) =>
-                stateMutation.mutate({
-                  task,
-                  action: task.status === 2 ? "reopen" : "complete",
-                })
-              }
             />
           ) : (
             <div className="detail-empty">
@@ -1074,6 +1074,9 @@ function TaskListPanel({
   onCreateNext,
   onDeleteEmpty,
   onClearSelection,
+  onDelete,
+  onRestore,
+  onPermanentDelete,
   onToggle,
 }: {
   tasks: Task[];
@@ -1089,6 +1092,9 @@ function TaskListPanel({
   onCreateNext: (afterTask: Task, sortOrder: number) => Promise<Task>;
   onDeleteEmpty: (task: Task) => Promise<void>;
   onClearSelection: () => void;
+  onDelete: (task: Task) => void;
+  onRestore: (task: Task) => void;
+  onPermanentDelete: (task: Task) => void;
   onToggle: (task: Task) => void;
 }) {
   const [editingTaskId, setEditingTaskId] = useState<string>();
@@ -1192,85 +1198,145 @@ function TaskListPanel({
     >
       {tasks.map((task) => {
         const editing = editingTaskId === task.id;
+        const actionItems = view === "trash"
+          ? (
+              <>
+                <ContextMenuItem onSelect={() => onRestore(task)}>
+                  <RotateCcw /> 恢复
+                </ContextMenuItem>
+                <ContextMenuItem
+                  variant="destructive"
+                  onSelect={() => onPermanentDelete(task)}
+                >
+                  <Trash2 /> 永久删除
+                </ContextMenuItem>
+              </>
+            )
+          : (
+              <ContextMenuItem variant="destructive" onSelect={() => onDelete(task)}>
+                <Trash2 /> 删除
+              </ContextMenuItem>
+            );
         return (
-          <div key={task.id}>
-            <div
-              role={editing ? undefined : "button"}
-              tabIndex={editing ? undefined : 0}
-              aria-label={editing ? undefined : `编辑任务 ${task.title}`}
-              className={`task-row ${editing ? "editing" : ""} ${activeTaskId === task.id ? "active" : ""} ${task.status === 2 ? "completed" : ""}`}
-              onClick={() => {
-                if (!editing) {
-                  beginEditing(task);
-                  void onSelect(task.id);
-                }
-              }}
-              onKeyDown={(event) => {
-                if (!editing && event.key === "Enter") {
-                  event.preventDefault();
-                  beginEditing(task);
-                  void onSelect(task.id);
-                }
-              }}
-            >
-              {view !== "trash" && (
-                <Checkbox
-                  checked={task.status === 2}
-                  aria-label={task.status === 2 ? "重新打开任务" : "完成任务"}
-                  className={`checkbox task-checkbox ${
-                    task.priority > 0 ? `has-priority priority-${task.priority}` : ""
-                  } ${task.status === 2 ? "checked" : ""}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onCheckedChange={() => onToggle(task)}
-                />
-              )}
-              {editing ? (
-                <Input
-                  ref={editInputRef}
-                  className="task-title-input"
-                  value={editTitle}
-                  aria-label="编辑任务标题"
-                  onClick={(event) => event.stopPropagation()}
-                  onChange={(event) => setEditTitle(event.target.value)}
-                  onBlur={() => void finishEditing(task, false)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-                      event.preventDefault();
-                      void finishEditing(task, true);
-                    }
-                    if (
-                      (event.key === "Backspace" || event.key === "Delete") &&
-                      !event.nativeEvent.isComposing &&
-                      editTitle.length === 0
-                    ) {
-                      event.preventDefault();
-                      void deleteEmptyTask(task);
-                    }
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      setEditingTaskId(undefined);
-                      setEditTitle(task.title);
-                      setInlineError("");
-                    }
-                  }}
-                />
-              ) : (
-                <span className="task-title">{task.title}</span>
-              )}
-              {(task.due_at || (!editing && task.tags.length > 0)) && (
-                <span className="task-meta">
-                  {task.due_at && (
-                    <span className={`task-date ${dueDateTone(task)}`}>{formatDue(task)}</span>
-                  )}
-                  {!editing && task.tags.slice(0, 2).map((tag) => (
-                    <span className="tag-mini" key={tag.id}>{tag.name}</span>
-                  ))}
-                </span>
-              )}
-            </div>
-          </div>
+          <ContextMenu key={task.id}>
+            <ContextMenuTrigger asChild>
+              <div
+                role={editing ? undefined : "button"}
+                tabIndex={editing ? undefined : 0}
+                aria-label={editing ? undefined : `编辑任务 ${task.title}`}
+                className={`task-row ${editing ? "editing" : ""} ${activeTaskId === task.id ? "active" : ""} ${task.status === 2 ? "completed" : ""}`}
+                onClick={() => {
+                  if (!editing) {
+                    beginEditing(task);
+                    void onSelect(task.id);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (!editing && event.key === "Enter") {
+                    event.preventDefault();
+                    beginEditing(task);
+                    void onSelect(task.id);
+                  }
+                }}
+              >
+                {view !== "trash" && (
+                  <Checkbox
+                    checked={task.status === 2}
+                    aria-label={task.status === 2 ? "重新打开任务" : "完成任务"}
+                    className={`checkbox task-checkbox ${
+                      task.priority > 0 ? `has-priority priority-${task.priority}` : ""
+                    } ${task.status === 2 ? "checked" : ""}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onCheckedChange={() => onToggle(task)}
+                  />
+                )}
+                {editing ? (
+                  <Input
+                    ref={editInputRef}
+                    className="task-title-input"
+                    value={editTitle}
+                    aria-label="编辑任务标题"
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) => setEditTitle(event.target.value)}
+                    onBlur={() => void finishEditing(task, false)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                        event.preventDefault();
+                        void finishEditing(task, true);
+                      }
+                      if (
+                        (event.key === "Backspace" || event.key === "Delete") &&
+                        !event.nativeEvent.isComposing &&
+                        editTitle.length === 0
+                      ) {
+                        event.preventDefault();
+                        void deleteEmptyTask(task);
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setEditingTaskId(undefined);
+                        setEditTitle(task.title);
+                        setInlineError("");
+                      }
+                    }}
+                  />
+                ) : (
+                  <span className="task-title">{task.title}</span>
+                )}
+                {(task.due_at || (!editing && task.tags.length > 0)) && (
+                  <span className="task-meta">
+                    {task.due_at && (
+                      <span className={`task-date ${dueDateTone(task)}`}>{formatDue(task)}</span>
+                    )}
+                    {!editing && task.tags.slice(0, 2).map((tag) => (
+                      <span className="tag-mini" key={tag.id}>{tag.name}</span>
+                    ))}
+                  </span>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="task-more-button"
+                      aria-label={`更多操作 ${task.title || "未命名任务"}`}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {view === "trash" ? (
+                      <>
+                        <DropdownMenuItem onSelect={() => onRestore(task)}>
+                          <RotateCcw /> 恢复
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => onPermanentDelete(task)}
+                        >
+                          <Trash2 /> 永久删除
+                        </DropdownMenuItem>
+                      </>
+                    ) : (
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => onDelete(task)}
+                      >
+                        <Trash2 /> 删除
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              {actionItems}
+            </ContextMenuContent>
+          </ContextMenu>
         );
       })}
       {inlineError && <div className="inline-error task-list-error">{inlineError}</div>}
@@ -1285,12 +1351,8 @@ const TaskDetail = forwardRef<EditorHandle, {
   tags: Tag[];
   onClose: () => void;
   onDataChanged: () => void;
-  onDelete: (task: Task) => void;
-  onRestore: (task: Task) => void;
-  onPermanentDelete: (task: Task) => void;
-  onToggle: (task: Task) => void;
 }>(function TaskDetail(
-  { taskId, lists, tags, onClose, onDataChanged, onDelete, onRestore, onPermanentDelete, onToggle },
+  { taskId, lists, tags, onClose, onDataChanged },
   ref,
 ) {
   const queryClient = useQueryClient();
@@ -1530,22 +1592,6 @@ const TaskDetail = forwardRef<EditorHandle, {
           onRetry={() => void savePending()}
         />
       )}
-      <div className="detail-actions">
-        {readOnly ? (
-          <>
-            <Button className="primary-button" onClick={() => onRestore(draft)}><RotateCcw /> 恢复</Button>
-            <Button variant="destructive" className="danger-button" onClick={() => onPermanentDelete(draft)}><Trash2 /> 永久删除</Button>
-          </>
-        ) : (
-          <>
-            <Button className="primary-button" onClick={() => onToggle(draft)}>
-              {draft.status === 2 ? <RotateCcw /> : <Check />}
-              {draft.status === 2 ? "重新打开" : "完成"}
-            </Button>
-            <Button variant="ghost" className="danger-button" onClick={() => onDelete(draft)}><Trash2 /> 删除</Button>
-          </>
-        )}
-      </div>
     </div>
   );
 });

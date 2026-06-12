@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { MemoryRouter } from "react-router-dom";
@@ -155,6 +155,33 @@ describe("Todo List app", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu", { name: "管理清单 工作" })).not.toBeInTheDocument();
+  });
+
+  it("opens task actions from the more button and removes detail footer actions", async () => {
+    const user = userEvent.setup();
+    renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
+
+    expect(await screen.findByText("任务详情")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "完成" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "更多操作 编写测试" }));
+    await user.click(screen.getByRole("menuitem", { name: "删除" }));
+
+    expect(screen.getByRole("alertdialog", { name: "删除任务" })).toBeInTheDocument();
+  });
+
+  it("opens the task action menu on right click", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    const title = await screen.findByText("编写测试");
+    const row = title.closest(".task-row");
+    expect(row).not.toBeNull();
+    fireEvent.contextMenu(row!);
+
+    await user.click(await screen.findByRole("menuitem", { name: "删除" }));
+    expect(screen.getByRole("alertdialog", { name: "删除任务" })).toBeInTheDocument();
   });
 
   it("opens a styled dialog for renaming a list", async () => {

@@ -556,6 +556,19 @@
   gap: 8px;
 }
 
+.task-more-button {
+  flex: 0 0 auto;
+  opacity: 0.5;
+  color: var(--muted-foreground);
+  transition: opacity 120ms ease-out, background 120ms ease-out;
+}
+
+.task-row:hover .task-more-button,
+.task-row:focus-within .task-more-button,
+.task-more-button[data-state="open"] {
+  opacity: 1;
+}
+
 .task-date {
   color: var(--muted-foreground);
   font-size: 12px;
@@ -963,18 +976,6 @@
   height: 7px;
   border-radius: 999px;
   background: currentColor;
-}
-
-.detail-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-
-.danger-button {
-  color: var(--destructive);
 }
 
 .panel-state,
