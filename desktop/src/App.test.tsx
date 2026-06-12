@@ -105,7 +105,9 @@ describe("AI 清单 app", () => {
 
     expect(await screen.findByText("下一条任务")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "编辑任务标题" })).toHaveValue("");
-    expect(screen.getByRole("textbox", { name: "编辑任务标题" })).toHaveFocus();
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "编辑任务标题" })).toHaveFocus(),
+    );
     expect(screen.getAllByRole("checkbox", { name: "完成任务" })).toHaveLength(3);
   });
 
@@ -588,6 +590,43 @@ describe("AI 清单 app", () => {
     expect(screen.getByText("任务详情")).toBeInTheDocument();
   });
 
+  it("opens the settings page and saves the backend api url", async () => {
+    server.use(
+      http.get("http://127.0.0.1:9000/health", () =>
+        HttpResponse.json({ status: "ok", database: "ok" }),
+      ),
+      http.get("http://127.0.0.1:9000/api/v1/lists", () => HttpResponse.json([])),
+      http.get("http://127.0.0.1:9000/api/v1/lists/trash", () => HttpResponse.json([])),
+      http.get("http://127.0.0.1:9000/api/v1/tags", () => HttpResponse.json([])),
+      http.get("http://127.0.0.1:9000/api/v1/tasks", () =>
+        HttpResponse.json({ items: [], next_cursor: null }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp("/settings");
+
+    expect(await screen.findByRole("heading", { name: "设置" })).toBeInTheDocument();
+    const input = screen.getByRole("textbox", { name: "后端接口地址" });
+    await user.clear(input);
+    await user.type(input, "http://127.0.0.1:9000");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(localStorage.getItem("ai-api-base-url")).toBe("http://127.0.0.1:9000");
+    expect(await screen.findByText("已保存，后续请求会使用新的地址。")).toBeInTheDocument();
+    expect(screen.getByText("当前：http://127.0.0.1:9000")).toBeInTheDocument();
+  });
+
+  it("keeps the settings page available when the backend health check fails", async () => {
+    server.use(
+      http.get("http://127.0.0.1:8000/health", () => HttpResponse.json({}, { status: 500 })),
+    );
+
+    renderApp("/settings");
+
+    expect(await screen.findByRole("heading", { name: "设置" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "无法连接到服务" })).not.toBeInTheDocument();
+  });
+
   it("shows the connection error page and retries", async () => {
     const health = vi.fn();
     server.use(
@@ -603,5 +642,8 @@ describe("AI 清单 app", () => {
     await user.click(screen.getByRole("button", { name: /重试连接/ }));
     await act(async () => {});
     expect(health).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getByRole("button", { name: "打开设置" }));
+    expect(await screen.findByRole("heading", { name: "设置" })).toBeInTheDocument();
   });
 });

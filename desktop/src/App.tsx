@@ -100,7 +100,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { api } from "./api";
+import { api, testApiBaseUrl } from "./api";
+import {
+  getApiBaseUrl,
+  getDefaultApiBaseUrl,
+  normalizeApiBaseUrl,
+  resetApiBaseUrl,
+  setApiBaseUrl,
+} from "./config";
 import { queryKeys } from "./query";
 import type {
   ChecklistItem,
@@ -344,7 +351,12 @@ function Shell() {
     [tasks.data],
   );
   const currentList = lists.data?.find((item) => item.id === scope.listId);
-  const currentTitle = scope.listId ? currentList?.name || "清单" : viewNames[scope.view || "inbox"];
+  const isSettingsRoute = location.pathname === "/settings";
+  const currentTitle = isSettingsRoute
+    ? "设置"
+    : scope.listId
+      ? currentList?.name || "清单"
+      : viewNames[scope.view || "inbox"];
 
   const toggleSidebar = () => {
     if (compactSidebar) {
@@ -570,14 +582,15 @@ function Shell() {
     return () => document.removeEventListener("keydown", onCompleteShortcut);
   }, [selectedTaskId, stateMutation, taskItems]);
 
-  if (health.isPending) {
+  if (health.isPending && !isSettingsRoute) {
     return <LoadingScreen />;
   }
-  if (health.isError) {
+  if (health.isError && !isSettingsRoute) {
     return (
       <ConnectionError
         message={errorMessage(health.error)}
         onRetry={() => void health.refetch()}
+        onOpenSettings={() => navigate("/settings")}
         pending={health.isFetching}
       />
     );
@@ -588,6 +601,7 @@ function Shell() {
       <div
         className={[
           "app-shell",
+          isSettingsRoute ? "settings-mode" : "",
           effectiveSidebarCollapsed ? "sidebar-collapsed" : "",
           compactSidebar ? "compact-sidebar" : "",
           sidebarOverlayOpen ? "sidebar-overlay-open" : "",
@@ -597,6 +611,7 @@ function Shell() {
       >
         <Sidebar
           collapsed={effectiveSidebarCollapsed}
+          currentPath={location.pathname}
           lists={lists.data || []}
           scope={scope}
           onToggle={toggleSidebar}
@@ -626,85 +641,91 @@ function Shell() {
           />
         )}
         <main className="middle-panel">
-          <TaskHeader
-            title={currentTitle}
-            count={taskItems.length}
-            search={search}
-            sort={sort}
-            quickAddRef={quickAddRef}
-            createPending={createTask.isPending}
-            createError={createTask.error ? errorMessage(createTask.error) : null}
-            onSearch={setSearch}
-            onSort={setSort}
-            onCreate={(title) => createTask.mutate(title)}
-          />
-          {scope.view === "trash" && (trashLists.data?.length || 0) > 0 && (
-            <DeletedLists
-              lists={trashLists.data || []}
-              onRestore={(id) =>
-                void api.restoreList(id).then(() => {
-                  void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
-                })
-              }
-              onDelete={(list) =>
-                setConfirm({
-                  title: "永久删除清单",
-                  message: `“${list.name}”及其中仍在回收站的任务将被永久删除，此操作不可撤销。`,
-                  action: () => {
-                    void api.permanentDeleteList(list.id).then(() => {
+          {isSettingsRoute ? (
+            <SettingsPage />
+          ) : (
+            <>
+              <TaskHeader
+                title={currentTitle}
+                count={taskItems.length}
+                search={search}
+                sort={sort}
+                quickAddRef={quickAddRef}
+                createPending={createTask.isPending}
+                createError={createTask.error ? errorMessage(createTask.error) : null}
+                onSearch={setSearch}
+                onSort={setSort}
+                onCreate={(title) => createTask.mutate(title)}
+              />
+              {scope.view === "trash" && (trashLists.data?.length || 0) > 0 && (
+                <DeletedLists
+                  lists={trashLists.data || []}
+                  onRestore={(id) =>
+                    void api.restoreList(id).then(() => {
+                      void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
+                    })
+                  }
+                  onDelete={(list) =>
+                    setConfirm({
+                      title: "永久删除清单",
+                      message: `“${list.name}”及其中仍在回收站的任务将被永久删除，此操作不可撤销。`,
+                      action: () => {
+                        void api.permanentDeleteList(list.id).then(() => {
+                          setConfirm(null);
+                          void queryClient.invalidateQueries({ queryKey: queryKeys.trashLists });
+                          invalidateTaskData(queryClient);
+                        });
+                      },
+                    })
+                  }
+                />
+              )}
+              <TaskListPanel
+                tasks={taskItems}
+                activeTaskId={selectedTaskId}
+                view={scope.view}
+                loading={tasks.isPending}
+                error={tasks.error}
+                hasNext={tasks.hasNextPage}
+                fetchingNext={tasks.isFetchingNextPage}
+                onLoadMore={() => void tasks.fetchNextPage()}
+                onSelect={openTask}
+                onRename={renameTask}
+                onCreateNext={createInlineTask}
+                onDeleteEmpty={deleteInlineTask}
+                onClearSelection={closeDetail}
+                onDelete={(task) =>
+                  setConfirm({
+                    title: "删除任务",
+                    message: "任务将进入回收站，你可以稍后恢复。",
+                    action: () => {
                       setConfirm(null);
-                      void queryClient.invalidateQueries({ queryKey: queryKeys.trashLists });
-                      invalidateTaskData(queryClient);
-                    });
-                  },
-                })
-              }
-            />
+                      deleteTaskMutation.mutate(task.id);
+                    },
+                  })
+                }
+                onRestore={(task) => restoreTaskMutation.mutate(task.id)}
+                onPermanentDelete={(task) =>
+                  setConfirm({
+                    title: "永久删除任务",
+                    message: "任务、检查项和标签关联将被永久删除，此操作不可撤销。",
+                    action: () => {
+                      setConfirm(null);
+                      permanentTaskMutation.mutate(task.id);
+                    },
+                  })
+                }
+                onToggle={(task) =>
+                  stateMutation.mutate({
+                    task,
+                    action: task.status === 2 ? "reopen" : "complete",
+                  })
+                }
+              />
+            </>
           )}
-          <TaskListPanel
-            tasks={taskItems}
-            activeTaskId={selectedTaskId}
-            view={scope.view}
-            loading={tasks.isPending}
-            error={tasks.error}
-            hasNext={tasks.hasNextPage}
-            fetchingNext={tasks.isFetchingNextPage}
-            onLoadMore={() => void tasks.fetchNextPage()}
-            onSelect={openTask}
-            onRename={renameTask}
-            onCreateNext={createInlineTask}
-            onDeleteEmpty={deleteInlineTask}
-            onClearSelection={closeDetail}
-            onDelete={(task) =>
-              setConfirm({
-                title: "删除任务",
-                message: "任务将进入回收站，你可以稍后恢复。",
-                action: () => {
-                  setConfirm(null);
-                  deleteTaskMutation.mutate(task.id);
-                },
-              })
-            }
-            onRestore={(task) => restoreTaskMutation.mutate(task.id)}
-            onPermanentDelete={(task) =>
-              setConfirm({
-                title: "永久删除任务",
-                message: "任务、检查项和标签关联将被永久删除，此操作不可撤销。",
-                action: () => {
-                  setConfirm(null);
-                  permanentTaskMutation.mutate(task.id);
-                },
-              })
-            }
-            onToggle={(task) =>
-              stateMutation.mutate({
-                task,
-                action: task.status === 2 ? "reopen" : "complete",
-              })
-            }
-          />
         </main>
-        {detailDrawer && selectedTaskId && (
+        {!isSettingsRoute && detailDrawer && selectedTaskId && (
           <button
             className="detail-backdrop"
             onClick={() => void closeDetail()}
@@ -712,7 +733,7 @@ function Shell() {
           />
         )}
         <aside className="detail-panel">
-          {selectedTaskId ? (
+          {isSettingsRoute ? null : selectedTaskId ? (
             <TaskDetail
               ref={editorRef}
               taskId={selectedTaskId}
@@ -762,6 +783,7 @@ function Shell() {
 
 function Sidebar({
   collapsed,
+  currentPath,
   lists,
   scope,
   onToggle,
@@ -772,6 +794,7 @@ function Sidebar({
   onDelete,
 }: {
   collapsed: boolean;
+  currentPath: string;
   lists: TaskList[];
   scope: Scope;
   onToggle: () => void;
@@ -891,9 +914,22 @@ function Sidebar({
                   </DropdownMenu>
                 )}
               </div>
-            ))}
+          ))}
         </div>
       </TooltipProvider>
+      <div className="sidebar-settings">
+        <div className="sidebar-divider" />
+        <Button
+          variant="ghost"
+          className={`nav-item ${currentPath === "/settings" ? "active" : ""}`}
+          onClick={() => void onNavigate("/settings")}
+          title="设置"
+          aria-label={collapsed ? "设置" : undefined}
+        >
+          <SlidersHorizontal />
+          {!collapsed && <span>设置</span>}
+        </Button>
+      </div>
     </nav>
   );
 }
@@ -1087,7 +1123,7 @@ function TaskListPanel({
   hasNext: boolean;
   fetchingNext: boolean;
   onLoadMore: () => void;
-  onSelect: (id: string) => void;
+  onSelect: (id: string) => Promise<void>;
   onRename: (task: Task, title: string) => Promise<Task>;
   onCreateNext: (afterTask: Task, sortOrder: number) => Promise<Task>;
   onDeleteEmpty: (task: Task) => Promise<void>;
@@ -1105,11 +1141,16 @@ function TaskListPanel({
 
   useLayoutEffect(() => {
     if (!editingTaskId) return;
-    const input = editInputRef.current;
-    if (!input) return;
-    input.focus();
-    const end = input.value.length;
-    input.setSelectionRange(end, end);
+    const focusInput = () => {
+      const input = editInputRef.current;
+      if (!input) return;
+      input.focus();
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    };
+    focusInput();
+    const frame = window.requestAnimationFrame(focusInput);
+    return () => window.cancelAnimationFrame(frame);
   }, [activeTaskId, editingTaskId]);
 
   const beginEditing = (task: Task) => {
@@ -1138,9 +1179,9 @@ function TaskListPanel({
           cleaned === task.title ? task : { ...task, title: cleaned },
           sortOrder,
         );
+        await onSelect(created.id);
         setEditingTaskId(created.id);
         setEditTitle("");
-        void onSelect(created.id);
       } else {
         setEditingTaskId(undefined);
       }
@@ -1160,9 +1201,9 @@ function TaskListPanel({
     try {
       await onDeleteEmpty(task);
       if (previousTask) {
+        await onSelect(previousTask.id);
         setEditingTaskId(previousTask.id);
         setEditTitle(previousTask.title);
-        void onSelect(previousTask.id);
       } else {
         setEditingTaskId(undefined);
         setEditTitle("");
@@ -2008,15 +2049,159 @@ function LoadingScreen() {
   return <div className="full-screen-state"><LoaderCircle className="spin" /><span>正在连接服务</span></div>;
 }
 
-function ConnectionError({ message, onRetry, pending }: { message: string; onRetry: () => void; pending: boolean }) {
+function ConnectionError({
+  message,
+  onRetry,
+  onOpenSettings,
+  pending,
+}: {
+  message: string;
+  onRetry: () => void;
+  onOpenSettings: () => void;
+  pending: boolean;
+}) {
   return (
     <div className="full-screen-state connection-error">
       <WifiOff />
       <h1>无法连接到服务</h1>
       <p>{message}</p>
-      <p>请确认 API 服务已启动并运行在 http://127.0.0.1:8000</p>
-      <Button className="primary-button" onClick={onRetry} disabled={pending}>{pending ? <LoaderCircle className="spin" /> : <RefreshCw />} 重试连接</Button>
+      <p>请确认 API 服务已启动并运行在 {getApiBaseUrl()}</p>
+      <div className="connection-actions">
+        <Button variant="outline" onClick={onOpenSettings}>
+          <SlidersHorizontal />
+          打开设置
+        </Button>
+        <Button className="primary-button" onClick={onRetry} disabled={pending}>{pending ? <LoaderCircle className="spin" /> : <RefreshCw />} 重试连接</Button>
+      </div>
     </div>
+  );
+}
+
+function SettingsPage() {
+  const queryClient = useQueryClient();
+  const [apiBaseUrl, setApiBaseUrlValue] = useState(() => getApiBaseUrl());
+  const [savedApiBaseUrl, setSavedApiBaseUrl] = useState(() => getApiBaseUrl());
+  const [status, setStatus] = useState<"idle" | "saving" | "testing" | "success" | "error">(
+    "idle",
+  );
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const current = getApiBaseUrl();
+    setApiBaseUrlValue(current);
+    setSavedApiBaseUrl(current);
+  }, []);
+
+  const refreshAppData = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.health });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.trashLists });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+    void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  };
+
+  const save = async () => {
+    const cleaned = normalizeApiBaseUrl(apiBaseUrl);
+    if (!cleaned) {
+      setStatus("error");
+      setMessage("请输入有效的后端接口地址。");
+      return;
+    }
+    setStatus("saving");
+    setMessage("");
+    setApiBaseUrl(cleaned);
+    setApiBaseUrlValue(cleaned);
+    setSavedApiBaseUrl(cleaned);
+    refreshAppData();
+    setStatus("success");
+    setMessage("已保存，后续请求会使用新的地址。");
+  };
+
+  const test = async () => {
+    const cleaned = normalizeApiBaseUrl(apiBaseUrl);
+    if (!cleaned) {
+      setStatus("error");
+      setMessage("请输入有效的后端接口地址。");
+      return;
+    }
+    setStatus("testing");
+    setMessage("");
+    try {
+      await testApiBaseUrl(cleaned);
+      setStatus("success");
+      setMessage("连接成功。");
+    } catch (error) {
+      setStatus("error");
+      setMessage(errorMessage(error));
+    }
+  };
+
+  const reset = () => {
+    resetApiBaseUrl();
+    const defaultUrl = getDefaultApiBaseUrl();
+    setApiBaseUrlValue(defaultUrl);
+    setSavedApiBaseUrl(defaultUrl);
+    setStatus("idle");
+    setMessage("");
+    refreshAppData();
+  };
+
+  return (
+    <section className="settings-page">
+      <div className="settings-header">
+        <div className="settings-title">
+          <div className="settings-icon">
+            <SlidersHorizontal />
+          </div>
+          <div>
+            <h1>设置</h1>
+            <p>配置桌面端请求的后端接口地址。</p>
+          </div>
+        </div>
+        <Badge variant="secondary">当前：{savedApiBaseUrl || getDefaultApiBaseUrl()}</Badge>
+      </div>
+      <form
+        className="settings-card"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        <div className="form-field">
+          <Label htmlFor="api-base-url">后端接口地址</Label>
+          <Input
+            id="api-base-url"
+            type="text"
+            value={apiBaseUrl}
+            onChange={(event) => setApiBaseUrlValue(event.target.value)}
+            placeholder={getDefaultApiBaseUrl()}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <span className="settings-help">
+            保存后会立即生效。留空会恢复默认地址 {getDefaultApiBaseUrl()}。
+          </span>
+        </div>
+        <div className="settings-actions">
+          <Button type="button" variant="outline" onClick={reset} disabled={status === "saving" || status === "testing"}>
+            恢复默认
+          </Button>
+          <Button type="button" variant="outline" onClick={() => void test()} disabled={status === "saving" || status === "testing"}>
+            {status === "testing" && <LoaderCircle className="spin" />}
+            测试连接
+          </Button>
+          <Button type="submit" disabled={status === "saving" || status === "testing"}>
+            {status === "saving" && <LoaderCircle className="spin" />}
+            保存
+          </Button>
+        </div>
+        {message && (
+          <div className={status === "error" ? "settings-message error" : "settings-message"}>
+            {message}
+          </div>
+        )}
+      </form>
+    </section>
   );
 }
 
@@ -2121,6 +2306,7 @@ export default function App() {
     <Routes>
       <Route path="/view/:view" element={<Shell />} />
       <Route path="/list/:listId" element={<Shell />} />
+      <Route path="/settings" element={<Shell />} />
       <Route path="*" element={<Navigate to="/view/inbox" replace />} />
     </Routes>
   );
