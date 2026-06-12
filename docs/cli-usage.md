@@ -2,14 +2,30 @@
 
 ## 安装
 
+### 一键安装（推荐）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/user/todolist/master/scripts/install.sh | bash
+```
+
+脚本会自动：
+1. 检查 Python 3.12+ 是否可用
+2. 检查/安装 [uv](https://docs.astral.sh/uv/) 包管理器
+3. 全局安装 `todo` 命令
+
+安装完成后执行 `todo health` 验证。
+
+卸载：
+
+```bash
+uv tool uninstall todolist-server
+```
+
+### 本地开发
+
 ```bash
 cd server
 uv sync
-```
-
-安装后可直接执行 `todo` 命令。仓库开发环境使用：
-
-```bash
 uv run --project server todo health
 ```
 
