@@ -87,20 +87,48 @@ describe("Todo List app", () => {
     expect(await screen.findByText("更新测试任务")).toBeInTheDocument();
   });
 
-  it("opens a new task input on Enter and keeps it ready after creation", async () => {
+  it("creates a real task row on Enter and keeps the new task selected", async () => {
     const user = userEvent.setup();
     renderApp();
 
     await user.click(await screen.findByText("编写测试"));
     await user.keyboard("{Enter}");
 
-    const newTaskInput = await screen.findByRole("textbox", { name: "新任务标题" });
-    expect(newTaskInput).toHaveFocus();
+    const newTaskInput = await screen.findByRole<HTMLInputElement>("textbox", {
+      name: "编辑任务标题",
+    });
+    await waitFor(() => expect(newTaskInput).toHaveFocus());
+    expect(newTaskInput).toHaveValue("");
+    expect(screen.getAllByRole("checkbox", { name: "完成任务" })).toHaveLength(2);
+    expect(screen.queryByRole("textbox", { name: "新任务标题" })).not.toBeInTheDocument();
     await user.type(newTaskInput, "下一条任务{Enter}");
 
     expect(await screen.findByText("下一条任务")).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "新任务标题" })).toHaveValue("");
-    expect(screen.getByRole("textbox", { name: "新任务标题" })).toHaveFocus();
+    expect(screen.getByRole("textbox", { name: "编辑任务标题" })).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "编辑任务标题" })).toHaveFocus();
+    expect(screen.getAllByRole("checkbox", { name: "完成任务" })).toHaveLength(3);
+  });
+
+  it("deletes an empty selected task on Backspace and focuses the previous task", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByText("编写测试"));
+    await user.keyboard("{Enter}");
+    const emptyTask = await screen.findByRole("textbox", { name: "编辑任务标题" });
+    expect(emptyTask).toHaveValue("");
+    await waitFor(() => expect(emptyTask).toHaveFocus());
+
+    await user.keyboard("{Backspace}");
+
+    await waitFor(() => {
+      const previousTask = screen.getByRole<HTMLInputElement>("textbox", {
+        name: "编辑任务标题",
+      });
+      expect(previousTask).toHaveValue("编写测试");
+      expect(previousTask).toHaveFocus();
+      expect(screen.getAllByRole("checkbox", { name: "完成任务" })).toHaveLength(1);
+    });
   });
 
   it("switches smart-list routes without losing the shell", async () => {

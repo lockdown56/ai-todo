@@ -98,6 +98,24 @@ async def test_task_views_search_sort_and_state_transitions(client):
 
 
 @pytest.mark.asyncio
+async def test_task_can_be_created_empty_at_a_specific_sort_position(client):
+    created = await client.post(
+        "/api/v1/tasks",
+        json={"title": "", "sort_order": 1536},
+    )
+    assert created.status_code == 201
+    assert created.json()["title"] == ""
+    assert created.json()["sort_order"] == 1536
+
+    updated = await client.patch(
+        f"/api/v1/tasks/{created.json()['id']}",
+        json={"title": "补充标题"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "补充标题"
+
+
+@pytest.mark.asyncio
 async def test_task_date_validation_and_today_view(client):
     now = datetime.now(UTC)
     invalid = await client.post(

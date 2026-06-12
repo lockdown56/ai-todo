@@ -473,8 +473,7 @@
   background: var(--accent);
 }
 
-.task-row.editing,
-.task-row.inline-task-create {
+.task-row.editing {
   cursor: text;
 }
 
@@ -482,20 +481,6 @@
   border-color: transparent;
   background: #f7f9fb;
   box-shadow: none;
-}
-
-.task-row.inline-task-create {
-  margin-top: 2px;
-  border-color: transparent;
-  background: #f8fafc;
-}
-
-.inline-task-placeholder {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  border: 2px dashed #c7d0da;
-  border-radius: 5px;
 }
 
 .task-title-input {

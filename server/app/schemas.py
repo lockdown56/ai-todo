@@ -120,7 +120,7 @@ class ChecklistReorder(BaseModel):
 
 class TaskFields(BaseModel):
     list_id: UUID | None = None
-    title: str | None = Field(default=None, min_length=1, max_length=500)
+    title: str | None = Field(default=None, max_length=500)
     description: str | None = None
     due_at: datetime | None = None
     is_all_day: bool | None = None
@@ -132,9 +132,7 @@ class TaskFields(BaseModel):
     @field_validator("title")
     @classmethod
     def clean_title(cls, value: str | None) -> str | None:
-        if value is not None and not (value := value.strip()):
-            raise ValueError("任务标题不能为空")
-        return value
+        return value.strip() if value is not None else None
 
     @model_validator(mode="after")
     def validate_dates(self) -> "TaskFields":
@@ -146,7 +144,7 @@ class TaskFields(BaseModel):
 
 
 class TaskCreate(TaskFields):
-    title: str = Field(min_length=1, max_length=500)
+    title: str = Field(max_length=500)
     checklist_items: list[ChecklistCreate] = Field(default_factory=list)
 
 

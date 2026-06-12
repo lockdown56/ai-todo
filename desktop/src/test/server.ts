@@ -58,9 +58,11 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
 }
 
 let tasks = [makeTask()];
+let nextTaskNumber = 101;
 
 export function resetMockData() {
   tasks = [makeTask()];
+  nextTaskNumber = 101;
 }
 
 export const handlers = [
@@ -94,11 +96,16 @@ export const handlers = [
         );
   }),
   http.post("http://127.0.0.1:8000/api/v1/tasks", async ({ request }) => {
-    const body = (await request.json()) as { title: string; list_id?: string };
+    const body = (await request.json()) as {
+      title: string;
+      list_id?: string;
+      sort_order?: number;
+    };
     const task = makeTask({
-      id: "00000000-0000-4000-8000-000000000101",
+      id: `00000000-0000-4000-8000-${String(nextTaskNumber++).padStart(12, "0")}`,
       title: body.title,
       list_id: body.list_id || inbox.id,
+      sort_order: body.sort_order ?? 2048,
       tags: [],
     });
     tasks.push(task);
@@ -113,6 +120,10 @@ export const handlers = [
       return HttpResponse.json(tasks[index]);
     },
   ),
+  http.delete("http://127.0.0.1:8000/api/v1/tasks/:taskId", ({ params }) => {
+    tasks = tasks.filter((item) => item.id !== params.taskId);
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.post(
     "http://127.0.0.1:8000/api/v1/tasks/:taskId/complete",
     ({ params }) => {

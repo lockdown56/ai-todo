@@ -110,7 +110,7 @@ export const api = {
     return request<TaskPage>(`/api/v1/tasks?${search}`);
   },
   task: (id: string) => request<Task>(`/api/v1/tasks/${id}`),
-  createTask: (body: { title: string; list_id?: string }) =>
+  createTask: (body: { title: string; list_id?: string; sort_order?: number }) =>
     request<Task>("/api/v1/tasks", json("POST", body)),
   updateTask: (id: string, body: TaskPatch) =>
     request<Task>(`/api/v1/tasks/${id}`, json("PATCH", body)),

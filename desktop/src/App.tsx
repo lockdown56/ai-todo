@@ -40,6 +40,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -215,6 +216,48 @@ function updateTaskListCache(
   );
 }
 
+function insertTaskAfter(
+  queryClient: ReturnType<typeof useQueryClient>,
+  queryKey: ReturnType<typeof queryKeys.tasks>,
+  task: Task,
+  afterTaskId: string,
+) {
+  queryClient.setQueryData<InfiniteData<TaskPage>>(queryKey, (data) => {
+    if (!data) return data;
+    let inserted = false;
+    const pages = data.pages.map((page) => {
+      if (inserted) return page;
+      const index = page.items.findIndex((item) => item.id === afterTaskId);
+      if (index < 0) return page;
+      inserted = true;
+      const items = [...page.items];
+      items.splice(index + 1, 0, task);
+      return { ...page, items };
+    });
+    return inserted ? { ...data, pages } : data;
+  });
+}
+
+function removeTaskFromCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  taskId: string,
+) {
+  queryClient.setQueriesData<InfiniteData<TaskPage>>(
+    { queryKey: ["tasks"] },
+    (data) => {
+      if (!data) return data;
+      let changed = false;
+      const pages = data.pages.map((page) => {
+        const items = page.items.filter((task) => task.id !== taskId);
+        if (items.length === page.items.length) return page;
+        changed = true;
+        return { ...page, items };
+      });
+      return changed ? { ...data, pages } : data;
+    },
+  );
+}
+
 function Shell() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -374,10 +417,31 @@ function Shell() {
   );
 
   const createInlineTask = useCallback(
-    async (title: string, listId: string) => {
-      const task = await api.createTask({ title, list_id: listId });
-      invalidateTaskData(queryClient, task.id);
+    async (afterTask: Task, sortOrder: number) => {
+      const task = await api.createTask({
+        title: "",
+        list_id: afterTask.list_id,
+        sort_order: sortOrder,
+      });
+      insertTaskAfter(
+        queryClient,
+        queryKeys.tasks(scopeKey, debouncedSearch, sort),
+        task,
+        afterTask.id,
+      );
+      queryClient.setQueryData(queryKeys.task(task.id), task);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
       return task;
+    },
+    [debouncedSearch, queryClient, scopeKey, sort],
+  );
+
+  const deleteInlineTask = useCallback(
+    async (task: Task) => {
+      await api.deleteTask(task.id);
+      removeTaskFromCache(queryClient, task.id);
+      queryClient.removeQueries({ queryKey: queryKeys.task(task.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
     },
     [queryClient],
   );
@@ -538,6 +602,8 @@ function Shell() {
             onSelect={openTask}
             onRename={renameTask}
             onCreateNext={createInlineTask}
+            onDeleteEmpty={deleteInlineTask}
+            onClearSelection={closeDetail}
             onToggle={(task) =>
               stateMutation.mutate({
                 task,
@@ -941,6 +1007,8 @@ function TaskListPanel({
   onSelect,
   onRename,
   onCreateNext,
+  onDeleteEmpty,
+  onClearSelection,
   onToggle,
 }: {
   tasks: Task[];
@@ -953,36 +1021,28 @@ function TaskListPanel({
   onLoadMore: () => void;
   onSelect: (id: string) => void;
   onRename: (task: Task, title: string) => Promise<Task>;
-  onCreateNext: (title: string, listId: string) => Promise<Task>;
+  onCreateNext: (afterTask: Task, sortOrder: number) => Promise<Task>;
+  onDeleteEmpty: (task: Task) => Promise<void>;
+  onClearSelection: () => void;
   onToggle: (task: Task) => void;
 }) {
   const [editingTaskId, setEditingTaskId] = useState<string>();
   const [editTitle, setEditTitle] = useState("");
-  const [draftAfterTaskId, setDraftAfterTaskId] = useState<string>();
-  const [newTitle, setNewTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [inlineError, setInlineError] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
-  const newInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!editingTaskId || saving) return;
+  useLayoutEffect(() => {
+    if (!editingTaskId) return;
     const input = editInputRef.current;
     if (!input) return;
     input.focus();
     const end = input.value.length;
     input.setSelectionRange(end, end);
-  }, [editingTaskId, saving]);
-
-  useEffect(() => {
-    if (!draftAfterTaskId || saving) return;
-    newInputRef.current?.focus();
-  }, [draftAfterTaskId, saving]);
+  }, [activeTaskId, editingTaskId]);
 
   const beginEditing = (task: Task) => {
     if (view === "trash") return;
-    setDraftAfterTaskId(undefined);
-    setNewTitle("");
     setInlineError("");
     setEditingTaskId(task.id);
     setEditTitle(task.title);
@@ -994,11 +1054,24 @@ function TaskListPanel({
     setInlineError("");
     setSaving(true);
     try {
-      if (cleaned && cleaned !== task.title) await onRename(task, cleaned);
-      setEditingTaskId(undefined);
+      if (cleaned !== task.title) await onRename(task, cleaned);
       if (createNext) {
-        setDraftAfterTaskId(task.id);
-        setNewTitle("");
+        const taskIndex = tasks.findIndex((item) => item.id === task.id);
+        const nextTask = tasks
+          .slice(taskIndex + 1)
+          .find((item) => item.list_id === task.list_id);
+        const sortOrder = nextTask
+          ? Math.floor((task.sort_order + nextTask.sort_order) / 2)
+          : task.sort_order + 1024;
+        const created = await onCreateNext(
+          cleaned === task.title ? task : { ...task, title: cleaned },
+          sortOrder,
+        );
+        setEditingTaskId(created.id);
+        setEditTitle("");
+        void onSelect(created.id);
+      } else {
+        setEditingTaskId(undefined);
       }
     } catch (saveError) {
       setInlineError(errorMessage(saveError));
@@ -1007,20 +1080,25 @@ function TaskListPanel({
     }
   };
 
-  const createNextTask = async (task: Task) => {
+  const deleteEmptyTask = async (task: Task) => {
     if (saving) return;
-    const cleaned = newTitle.trim();
-    if (!cleaned) {
-      newInputRef.current?.focus();
-      return;
-    }
+    const taskIndex = tasks.findIndex((item) => item.id === task.id);
+    const previousTask = tasks[taskIndex - 1];
     setInlineError("");
     setSaving(true);
     try {
-      await onCreateNext(cleaned, task.list_id);
-      setNewTitle("");
-    } catch (createError) {
-      setInlineError(errorMessage(createError));
+      await onDeleteEmpty(task);
+      if (previousTask) {
+        setEditingTaskId(previousTask.id);
+        setEditTitle(previousTask.title);
+        void onSelect(previousTask.id);
+      } else {
+        setEditingTaskId(undefined);
+        setEditTitle("");
+        void onClearSelection();
+      }
+    } catch (deleteError) {
+      setInlineError(errorMessage(deleteError));
     } finally {
       setSaving(false);
     }
@@ -1049,7 +1127,6 @@ function TaskListPanel({
     >
       {tasks.map((task) => {
         const editing = editingTaskId === task.id;
-        const showDraft = draftAfterTaskId === task.id;
         return (
           <div key={task.id}>
             <div
@@ -1089,7 +1166,6 @@ function TaskListPanel({
                   ref={editInputRef}
                   className="task-title-input"
                   value={editTitle}
-                  disabled={saving}
                   aria-label="编辑任务标题"
                   onClick={(event) => event.stopPropagation()}
                   onChange={(event) => setEditTitle(event.target.value)}
@@ -1098,6 +1174,14 @@ function TaskListPanel({
                     if (event.key === "Enter" && !event.nativeEvent.isComposing) {
                       event.preventDefault();
                       void finishEditing(task, true);
+                    }
+                    if (
+                      (event.key === "Backspace" || event.key === "Delete") &&
+                      !event.nativeEvent.isComposing &&
+                      editTitle.length === 0
+                    ) {
+                      event.preventDefault();
+                      void deleteEmptyTask(task);
                     }
                     if (event.key === "Escape") {
                       event.preventDefault();
@@ -1119,32 +1203,6 @@ function TaskListPanel({
                 </span>
               )}
             </div>
-            {showDraft && view !== "trash" && (
-              <div className="task-row inline-task-create">
-                <span className="inline-task-placeholder" aria-hidden="true" />
-                <Input
-                  ref={newInputRef}
-                  className="task-title-input"
-                  value={newTitle}
-                  disabled={saving}
-                  placeholder="输入任务标题，回车创建"
-                  aria-label="新任务标题"
-                  onChange={(event) => setNewTitle(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-                      event.preventDefault();
-                      void createNextTask(task);
-                    }
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      setDraftAfterTaskId(undefined);
-                      setNewTitle("");
-                      setInlineError("");
-                    }
-                  }}
-                />
-              </div>
-            )}
           </div>
         );
       })}

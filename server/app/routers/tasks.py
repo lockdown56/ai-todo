@@ -71,12 +71,16 @@ async def create_task(payload: TaskCreate, session: AsyncSession = Depends(get_s
         is_all_day=payload.is_all_day or False,
         reminder_at=payload.reminder_at,
         priority=payload.priority or 0,
-        sort_order=await next_sort_order(
-            session,
-            Task,
-            Task.user_id == DEFAULT_USER_ID,
-            Task.list_id == task_list.id,
-            Task.deleted_at.is_(None),
+        sort_order=(
+            payload.sort_order
+            if payload.sort_order is not None
+            else await next_sort_order(
+                session,
+                Task,
+                Task.user_id == DEFAULT_USER_ID,
+                Task.list_id == task_list.id,
+                Task.deleted_at.is_(None),
+            )
         ),
         tags=tags,
     )
