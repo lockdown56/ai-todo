@@ -196,6 +196,60 @@ describe("Todo List app", () => {
     expect(checkbox).not.toHaveClass("priority-3");
   });
 
+  it("shows relative due dates and keeps the date visible while editing", async () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const later = new Date(today);
+    later.setDate(later.getDate() + 3);
+    const tasks = [
+      makeTask({ due_at: today.toISOString(), is_all_day: true }),
+      makeTask({
+        id: "00000000-0000-4000-8000-000000000101",
+        title: "明日任务",
+        due_at: tomorrow.toISOString(),
+        is_all_day: true,
+      }),
+      makeTask({
+        id: "00000000-0000-4000-8000-000000000102",
+        title: "后续任务",
+        due_at: later.toISOString(),
+        is_all_day: true,
+      }),
+    ];
+    server.use(
+      http.get("http://127.0.0.1:8000/api/v1/tasks", () =>
+        HttpResponse.json({ items: tasks, next_cursor: null }),
+      ),
+      http.get(
+        "http://127.0.0.1:8000/api/v1/tasks/:taskId",
+        ({ params }) =>
+          HttpResponse.json(tasks.find((task) => task.id === params.taskId)),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp();
+
+    const todayTitle = await screen.findByText("编写测试");
+    const todayRow = todayTitle.closest(".task-row");
+    const tomorrowRow = screen.getByText("明日任务").closest(".task-row");
+    const laterRow = screen.getByText("后续任务").closest(".task-row");
+    expect(todayRow?.querySelector(".task-date")).toHaveTextContent("今天");
+    expect(tomorrowRow?.querySelector(".task-date")).toHaveTextContent("明天");
+    expect(laterRow?.querySelector(".task-date")).toHaveTextContent(
+      new Intl.DateTimeFormat("zh-CN", {
+        month: "numeric",
+        day: "numeric",
+      }).format(later),
+    );
+
+    await user.click(todayTitle);
+
+    expect(screen.getByRole("textbox", { name: "编辑任务标题" })).toHaveFocus();
+    expect(todayRow?.querySelector(".task-date")).toHaveTextContent("今天");
+  });
+
   it("sets task priority with Alt plus a number while the task title is focused", async () => {
     const patches: object[] = [];
     server.use(

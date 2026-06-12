@@ -1259,12 +1259,14 @@ function TaskListPanel({
               ) : (
                 <span className="task-title">{task.title}</span>
               )}
-              {!editing && (
+              {(task.due_at || (!editing && task.tags.length > 0)) && (
                 <span className="task-meta">
                   {task.due_at && (
                     <span className={`task-date ${dueDateTone(task)}`}>{formatDue(task)}</span>
                   )}
-                  {task.tags.slice(0, 2).map((tag) => <span className="tag-mini" key={tag.id}>{tag.name}</span>)}
+                  {!editing && task.tags.slice(0, 2).map((tag) => (
+                    <span className="tag-mini" key={tag.id}>{tag.name}</span>
+                  ))}
                 </span>
               )}
             </div>
@@ -1975,6 +1977,16 @@ function ConnectionError({ message, onRetry, pending }: { message: string; onRet
 function formatDue(task: Task): string {
   if (!task.due_at) return "";
   const date = new Date(task.due_at);
+  const today = new Date();
+  const dateDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const tomorrowDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + 1,
+  ).getTime();
+  if (dateDay === todayDay) return "今天";
+  if (dateDay === tomorrowDay) return "明天";
   return new Intl.DateTimeFormat("zh-CN", task.is_all_day
     ? { month: "numeric", day: "numeric" }
     : { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
