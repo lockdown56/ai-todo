@@ -1,8 +1,8 @@
 [package]
 name = "todolist"
 version = "0.1.0"
-description = "Todo List desktop application"
-authors = ["Todo List"]
+description = "AI 清单 desktop application"
+authors = ["AI 清单"]
 edition = "2021"
 
 [lib]

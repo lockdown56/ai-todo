@@ -1,7 +1,7 @@
 [project]
 name = "todolist-server"
 version = "0.1.0"
-description = "FastAPI backend for the Todo List desktop application"
+description = "FastAPI backend for the AI 清单 desktop application"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.14,<2",

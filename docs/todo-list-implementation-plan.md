@@ -1,4 +1,4 @@
-# Tauri Todo List 实现方案
+# Tauri AI 清单实现方案
 
 ## 总体方案
 

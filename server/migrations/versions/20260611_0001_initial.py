@@ -1,4 +1,4 @@
-"""Initial Todo List schema.
+"""Initial AI 清单 schema.
 
 Revision ID: 20260611_0001
 Revises:

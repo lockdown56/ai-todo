@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Todo List",
+  "productName": "AI 清单",
   "version": "0.1.0",
   "identifier": "com.local.todolist",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Todo List",
+        "title": "AI 清单",
         "width": 1440,
         "height": 900,
         "minWidth": 960,

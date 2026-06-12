@@ -41,5 +41,5 @@ pub fn run() {
 
     tauri::Builder::default()
         .run(tauri::generate_context!())
-        .expect("error while running Todo List");
+        .expect("error while running AI 清单");
 }

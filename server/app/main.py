@@ -19,7 +19,7 @@ def create_app(*, initialize: bool = True) -> FastAPI:
                 await initialize_data(session)
         yield
 
-    app = FastAPI(title="Todo List API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="AI 清单 API", version="0.1.0", lifespan=lifespan)
     settings = get_settings()
     app.add_middleware(
         CORSMiddleware,

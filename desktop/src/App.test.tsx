@@ -32,7 +32,7 @@ function setWindowWidth(width: number) {
   window.dispatchEvent(new Event("resize"));
 }
 
-describe("Todo List app", () => {
+describe("AI 清单 app", () => {
   it("renders the three-column shell and persists sidebar collapse", async () => {
     const user = userEvent.setup();
     const { container } = renderApp();

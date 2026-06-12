@@ -786,8 +786,8 @@ function Sidebar({
       <div className="sidebar-header">
         {!collapsed && (
           <>
-            <div className="logo">T</div>
-            <strong>Todo List</strong>
+            <div className="logo">AI</div>
+            <strong>AI 清单</strong>
           </>
         )}
         <Button
