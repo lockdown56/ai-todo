@@ -76,6 +76,7 @@ describe("Todo List app", () => {
     await user.click(await screen.findByText("编写测试"));
     const input = screen.getByRole<HTMLInputElement>("textbox", { name: "编辑任务标题" });
     expect(input).toHaveFocus();
+    expect(await screen.findByText("任务详情")).toBeInTheDocument();
     expect(input.selectionStart).toBe(input.value.length);
     expect(input.selectionEnd).toBe(input.value.length);
 

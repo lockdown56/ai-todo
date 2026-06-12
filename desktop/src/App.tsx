@@ -980,10 +980,7 @@ function TaskListPanel({
   }, [draftAfterTaskId, saving]);
 
   const beginEditing = (task: Task) => {
-    if (view === "trash") {
-      void onSelect(task.id);
-      return;
-    }
+    if (view === "trash") return;
     setDraftAfterTaskId(undefined);
     setNewTitle("");
     setInlineError("");
@@ -1061,13 +1058,16 @@ function TaskListPanel({
               aria-label={editing ? undefined : `编辑任务 ${task.title}`}
               className={`task-row ${editing ? "editing" : ""} ${activeTaskId === task.id ? "active" : ""} ${task.status === 2 ? "completed" : ""}`}
               onClick={() => {
-                if (!editing) beginEditing(task);
+                if (!editing) {
+                  beginEditing(task);
+                  void onSelect(task.id);
+                }
               }}
-              onDoubleClick={() => void onSelect(task.id)}
               onKeyDown={(event) => {
                 if (!editing && event.key === "Enter") {
                   event.preventDefault();
                   beginEditing(task);
+                  void onSelect(task.id);
                 }
               }}
             >
@@ -1266,119 +1266,121 @@ const TaskDetail = forwardRef<EditorHandle, {
         onChange={(event) => schedule("title", event.target.value)}
         aria-label="任务标题"
       />
-      <DetailField label="截止日期" icon={<CalendarDays />}>
-        <div className="date-row">
-          <DateTimePicker
-            label="截止日期"
-            value={draft.due_at}
-            allDay={draft.is_all_day}
-            disabled={readOnly}
-            onChange={(value) => schedule("due_at", value)}
-          />
-          <Label className="all-day-toggle">
-            <Checkbox
-              checked={draft.is_all_day}
+      <div className="detail-properties">
+        <DetailField label="截止日期" icon={<CalendarDays />}>
+          <div className="date-row">
+            <DateTimePicker
+              label="截止日期"
+              value={draft.due_at}
+              allDay={draft.is_all_day}
               disabled={readOnly}
-              onCheckedChange={(checked) => schedule("is_all_day", checked === true)}
-              aria-label="全天"
+              onChange={(value) => schedule("due_at", value)}
             />
-            全天
-          </Label>
-          {draft.due_at && !readOnly && (
-            <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => { schedule("due_at", null); schedule("reminder_at", null); }} aria-label="清除截止日期"><X /></Button>
-          )}
-        </div>
-      </DetailField>
-      <DetailField label="提醒时间" icon={<Bell />}>
-        <div className="date-row">
-          <DateTimePicker
-            label="提醒时间"
-            value={draft.reminder_at}
-            disabled={readOnly || !draft.due_at}
-            max={draft.due_at}
-            onChange={(value) => schedule("reminder_at", value)}
-          />
-          {draft.reminder_at && !readOnly && (
-            <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => schedule("reminder_at", null)} aria-label="清除提醒时间"><X /></Button>
-          )}
-        </div>
-      </DetailField>
-      <DetailField label="优先级" icon={<Star />}>
-        <Select
-          value={String(draft.priority)}
-          disabled={readOnly}
-          onValueChange={(value) => schedule("priority", Number(value) as 0 | 1 | 3 | 5)}
-        >
-          <SelectTrigger className="detail-select" aria-label="优先级">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {[0, 1, 3, 5].map((value) => (
-              <SelectItem key={value} value={String(value)}>
-                {priorityLabels[value as 0 | 1 | 3 | 5]}
-              </SelectItem>
+            <Label className="all-day-toggle">
+              <Checkbox
+                checked={draft.is_all_day}
+                disabled={readOnly}
+                onCheckedChange={(checked) => schedule("is_all_day", checked === true)}
+                aria-label="全天"
+              />
+              全天
+            </Label>
+            {draft.due_at && !readOnly && (
+              <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => { schedule("due_at", null); schedule("reminder_at", null); }} aria-label="清除截止日期"><X /></Button>
+            )}
+          </div>
+        </DetailField>
+        <DetailField label="提醒时间" icon={<Bell />}>
+          <div className="date-row">
+            <DateTimePicker
+              label="提醒时间"
+              value={draft.reminder_at}
+              disabled={readOnly || !draft.due_at}
+              max={draft.due_at}
+              onChange={(value) => schedule("reminder_at", value)}
+            />
+            {draft.reminder_at && !readOnly && (
+              <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => schedule("reminder_at", null)} aria-label="清除提醒时间"><X /></Button>
+            )}
+          </div>
+        </DetailField>
+        <DetailField label="优先级" icon={<Star />}>
+          <Select
+            value={String(draft.priority)}
+            disabled={readOnly}
+            onValueChange={(value) => schedule("priority", Number(value) as 0 | 1 | 3 | 5)}
+          >
+            <SelectTrigger className="detail-select" size="sm" aria-label="优先级">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[0, 1, 3, 5].map((value) => (
+                <SelectItem key={value} value={String(value)}>
+                  {priorityLabels[value as 0 | 1 | 3 | 5]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </DetailField>
+        <DetailField label="所属清单" icon={<List />}>
+          <Select
+            value={draft.list_id}
+            disabled={readOnly}
+            onValueChange={(value) => schedule("list_id", value)}
+          >
+            <SelectTrigger className="detail-select" size="sm" aria-label="所属清单">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {lists.map((list) => <SelectItem key={list.id} value={list.id}>{list.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </DetailField>
+        <DetailField label="标签" icon={<TagIcon />}>
+          <div className="tags-row">
+            {draft.tags.map((tag) => (
+              <Badge variant="secondary" className="tag-pill" key={tag.id}>
+                <span className="tag-dot" style={{ backgroundColor: tag.color }} />
+                {tag.name}
+                {!readOnly && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => schedule("tag_ids", draft.tags.filter((item) => item.id !== tag.id).map((item) => item.id))}
+                    aria-label={`移除标签 ${tag.name}`}
+                  ><X /></Button>
+                )}
+              </Badge>
             ))}
-          </SelectContent>
-        </Select>
-      </DetailField>
-      <DetailField label="所属清单" icon={<List />}>
-        <Select
-          value={draft.list_id}
-          disabled={readOnly}
-          onValueChange={(value) => schedule("list_id", value)}
-        >
-          <SelectTrigger className="detail-select" aria-label="所属清单">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {lists.map((list) => <SelectItem key={list.id} value={list.id}>{list.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </DetailField>
-      <DetailField label="标签" icon={<TagIcon />}>
-        <div className="tags-row">
-          {draft.tags.map((tag) => (
-            <Badge variant="secondary" className="tag-pill" key={tag.id}>
-              <span className="tag-dot" style={{ backgroundColor: tag.color }} />
-              {tag.name}
-              {!readOnly && (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => schedule("tag_ids", draft.tags.filter((item) => item.id !== tag.id).map((item) => item.id))}
-                  aria-label={`移除标签 ${tag.name}`}
-                ><X /></Button>
-              )}
-            </Badge>
-          ))}
-          {!readOnly && (
-            <Popover open={tagMenu} onOpenChange={setTagMenu}>
-              <PopoverTrigger asChild>
-                <Button variant="secondary" size="sm" className="add-tag-button">
-                  <Plus /> 添加
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="tag-popover">
-                <TagMenu
-                  tags={tags}
-                  selected={selectedTagIds}
-                  onToggle={(tagId) => {
-                    const next = new Set(selectedTagIds);
-                    if (next.has(tagId)) next.delete(tagId); else next.add(tagId);
-                    schedule("tag_ids", [...next]);
-                    setDraft((current) => current ? { ...current, tags: tags.filter((tag) => next.has(tag.id)) } : current);
-                  }}
-                  onCreated={(tag) => {
-                    queryClient.setQueryData<Tag[]>(queryKeys.tags, (old) => [...(old || []), tag]);
-                    schedule("tag_ids", [...selectedTagIds, tag.id]);
-                    setDraft((current) => current ? { ...current, tags: [...current.tags, tag] } : current);
-                  }}
-                />
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
-      </DetailField>
+            {!readOnly && (
+              <Popover open={tagMenu} onOpenChange={setTagMenu}>
+                <PopoverTrigger asChild>
+                  <Button variant="secondary" size="sm" className="add-tag-button">
+                    <Plus /> 添加
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="tag-popover">
+                  <TagMenu
+                    tags={tags}
+                    selected={selectedTagIds}
+                    onToggle={(tagId) => {
+                      const next = new Set(selectedTagIds);
+                      if (next.has(tagId)) next.delete(tagId); else next.add(tagId);
+                      schedule("tag_ids", [...next]);
+                      setDraft((current) => current ? { ...current, tags: tags.filter((tag) => next.has(tag.id)) } : current);
+                    }}
+                    onCreated={(tag) => {
+                      queryClient.setQueryData<Tag[]>(queryKeys.tags, (old) => [...(old || []), tag]);
+                      schedule("tag_ids", [...selectedTagIds, tag.id]);
+                      setDraft((current) => current ? { ...current, tags: [...current.tags, tag] } : current);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+        </DetailField>
+      </div>
       <Label className="detail-block">
         <span className="field-label">描述</span>
         <Textarea
