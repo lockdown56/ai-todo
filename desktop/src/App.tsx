@@ -124,6 +124,7 @@ const viewIcons = {
 };
 
 const priorityLabels = { 0: "无", 1: "低", 3: "中", 5: "高" };
+const priorityShortcutValues = [0, 1, 3, 5] as const;
 const tagColors = ["#4F6FAE", "#5F7FB6", "#C08A32", "#C96F43", "#4F8A68", "#B65B62"];
 const weekDayLabels = ["一", "二", "三", "四", "五", "六", "日"];
 
@@ -164,6 +165,18 @@ function isCtrlShortcut(event: KeyboardEvent, key: string): boolean {
     !event.shiftKey &&
     event.key.toLowerCase() === key
   );
+}
+
+function dueAtForShortcut(key: "1" | "2" | "3"): string {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  if (key === "2") {
+    date.setDate(date.getDate() + 1);
+  } else if (key === "3") {
+    const daysUntilNextMonday = ((8 - date.getDay()) % 7) || 7;
+    date.setDate(date.getDate() + daysUntilNextMonday);
+  }
+  return date.toISOString();
 }
 
 function useDebouncedValue<T>(value: T, delay: number): T {
@@ -452,6 +465,17 @@ function Shell() {
     onSuccess: (task) => invalidateTaskData(queryClient, task.id),
   });
 
+  const applyTaskShortcut = useCallback(
+    async (task: Task, patch: TaskPatch) => {
+      if (editorRef.current && !(await editorRef.current.flush())) return;
+      const saved = await api.updateTask(task.id, patch);
+      updateTaskListCache(queryClient, task.id, saved);
+      queryClient.setQueryData(queryKeys.task(task.id), saved);
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    [queryClient],
+  );
+
   const deleteTaskMutation = useMutation({
     mutationFn: api.deleteTask,
     onSuccess: (_, id) => {
@@ -473,6 +497,47 @@ function Shell() {
       invalidateTaskData(queryClient, id);
     },
   });
+
+  useEffect(() => {
+    const onTaskPropertyShortcut = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        isImeComposing(event) ||
+        event.metaKey ||
+        event.shiftKey ||
+        !selectedTaskId ||
+        !/^[0-3]$/.test(event.key)
+      ) {
+        return;
+      }
+      const task = taskItems.find((item) => item.id === selectedTaskId);
+      if (!task || task.deleted_at) return;
+
+      let patch: TaskPatch | undefined;
+      if (event.altKey && !event.ctrlKey) {
+        patch = {
+          priority: priorityShortcutValues[
+            Number(event.key)
+          ] as Task["priority"],
+        };
+      } else if (event.ctrlKey && !event.altKey) {
+        patch = event.key === "0"
+          ? { due_at: null, reminder_at: null }
+          : {
+              due_at: dueAtForShortcut(event.key as "1" | "2" | "3"),
+              is_all_day: true,
+              reminder_at: null,
+            };
+      }
+      if (!patch) return;
+
+      event.preventDefault();
+      void applyTaskShortcut(task, patch);
+    };
+    document.addEventListener("keydown", onTaskPropertyShortcut);
+    return () => document.removeEventListener("keydown", onTaskPropertyShortcut);
+  }, [applyTaskShortcut, selectedTaskId, taskItems]);
 
   useEffect(() => {
     const onCompleteShortcut = (event: KeyboardEvent) => {

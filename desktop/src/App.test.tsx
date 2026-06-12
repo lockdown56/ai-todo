@@ -196,6 +196,92 @@ describe("Todo List app", () => {
     expect(checkbox).not.toHaveClass("priority-3");
   });
 
+  it("sets task priority with Alt plus a number while the task title is focused", async () => {
+    const patches: object[] = [];
+    server.use(
+      http.patch(
+        "http://127.0.0.1:8000/api/v1/tasks/:taskId",
+        async ({ request }) => {
+          const patch = (await request.json()) as object;
+          patches.push(patch);
+          return HttpResponse.json(makeTask({ ...patch }));
+        },
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByText("编写测试"));
+    const title = screen.getByRole("textbox", { name: "编辑任务标题" });
+    expect(title).toHaveFocus();
+
+    for (const [key, priority] of [["3", 5], ["2", 3], ["1", 1], ["0", 0]] as const) {
+      const shortcut = new KeyboardEvent("keydown", {
+        key,
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      expect(title.dispatchEvent(shortcut)).toBe(false);
+      await waitFor(() => expect(patches.at(-1)).toEqual({ priority }));
+    }
+  });
+
+  it("sets and clears task due dates with Ctrl plus a number", async () => {
+    const patches: Array<Record<string, unknown>> = [];
+    server.use(
+      http.patch(
+        "http://127.0.0.1:8000/api/v1/tasks/:taskId",
+        async ({ request }) => {
+          const patch = (await request.json()) as Record<string, unknown>;
+          patches.push(patch);
+          return HttpResponse.json(makeTask({ ...patch }));
+        },
+      ),
+    );
+    renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
+
+    const detailTitle = await screen.findByRole("textbox", { name: "任务标题" });
+    const expectedDates = ["1", "2", "3"].map((key) => {
+      const date = new Date();
+      date.setHours(0, 0, 0, 0);
+      if (key === "2") date.setDate(date.getDate() + 1);
+      if (key === "3") {
+        const daysUntilNextMonday = ((8 - date.getDay()) % 7) || 7;
+        date.setDate(date.getDate() + daysUntilNextMonday);
+      }
+      return date.toISOString();
+    });
+
+    for (const [index, key] of ["1", "2", "3"].entries()) {
+      const shortcut = new KeyboardEvent("keydown", {
+        key,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      expect(detailTitle.dispatchEvent(shortcut)).toBe(false);
+      await waitFor(() =>
+        expect(patches.at(-1)).toEqual({
+          due_at: expectedDates[index],
+          is_all_day: true,
+          reminder_at: null,
+        }),
+      );
+    }
+
+    const clearShortcut = new KeyboardEvent("keydown", {
+      key: "0",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    expect(detailTitle.dispatchEvent(clearShortcut)).toBe(false);
+    await waitFor(() =>
+      expect(patches.at(-1)).toEqual({ due_at: null, reminder_at: null }),
+    );
+  });
+
   it("debounces search before requesting filtered tasks", async () => {
     const requestedQueries: string[] = [];
     server.use(
