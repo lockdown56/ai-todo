@@ -7,7 +7,11 @@
     "dev": "vite --port 1420",
     "build": "tsc -b && vite build",
     "test": "vitest --config vitest.config.ts",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:apk": "tauri android build -- --apk",
+    "android:aab": "tauri android build -- --aab"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
