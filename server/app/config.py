@@ -12,7 +12,10 @@ class Settings(BaseSettings):
     app_timezone: str = "Asia/Shanghai"
     cors_origins: Annotated[list[str], NoDecode] = [
         "http://localhost:1420",
+        "http://127.0.0.1:1420",
         "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
     ]
     environment: str = "development"
 

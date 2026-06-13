@@ -22,7 +22,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://todolist:change-me@postgres:5432/todolist}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Shanghai}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:1420,http://127.0.0.1:1420,tauri://localhost}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:1420,http://127.0.0.1:1420,tauri://localhost,http://tauri.localhost,https://tauri.localhost}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
