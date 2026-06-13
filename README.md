@@ -20,6 +20,9 @@ docker compose up --build -d
 curl http://127.0.0.1:8000/health
 ```
 
+默认仅允许本机访问 API。需要让其他设备连接时，在服务端 `.env` 中设置
+`API_BIND_ADDRESS=0.0.0.0`，并仅向可信来源开放服务器的 TCP 8000 端口。
+
 开发环境默认登录账号为 `admin` / `change-me`。部署前必须在 `.env` 中修改
 `AUTH_PASSWORD` 和 `AUTH_JWT_SECRET`；生产环境的 JWT 密钥至少需要 32 个字符。
 
