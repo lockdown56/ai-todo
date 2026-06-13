@@ -1,13 +1,14 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import require_auth
 from app.config import get_settings
 from app.database import SessionLocal
 from app.errors import ApiError, api_error_handler, validation_error_handler
-from app.routers import checklist, health, lists, tags, tasks
+from app.routers import auth, checklist, health, lists, tags, tasks
 from app.services import initialize_data
 
 
@@ -31,10 +32,12 @@ def create_app(*, initialize: bool = True) -> FastAPI:
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(health.router)
-    app.include_router(lists.router)
-    app.include_router(tasks.router)
-    app.include_router(checklist.router)
-    app.include_router(tags.router)
+    app.include_router(auth.router)
+    protected = [Depends(require_auth)]
+    app.include_router(lists.router, dependencies=protected)
+    app.include_router(tasks.router, dependencies=protected)
+    app.include_router(checklist.router, dependencies=protected)
+    app.include_router(tags.router, dependencies=protected)
     return app
 
 

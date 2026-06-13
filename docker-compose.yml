@@ -22,7 +22,13 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://todolist:change-me@postgres:5432/todolist}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Shanghai}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:1420,http://127.0.0.1:1420,tauri://localhost,http://tauri.localhost,https://tauri.localhost}
+      AUTH_USERNAME: ${AUTH_USERNAME:-admin}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-change-me}
+      AUTH_DISPLAY_NAME: ${AUTH_DISPLAY_NAME:-默认用户}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-development-only-change-this-secret}
+      AUTH_TOKEN_TTL_SECONDS: ${AUTH_TOKEN_TTL_SECONDS:-604800}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:

@@ -11,6 +11,25 @@ class ApiModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AuthLogin(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=500)
+
+
+class AuthUserResponse(BaseModel):
+    id: UUID
+    username: str
+    display_name: str
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int
+    expires_at: datetime
+    user: AuthUserResponse
+
+
 class ListCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     color: str = Field(default="#6C5CE7", pattern=HEX_COLOR)

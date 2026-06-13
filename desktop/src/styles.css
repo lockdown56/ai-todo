@@ -451,6 +451,135 @@
   color: var(--destructive);
 }
 
+.standalone-settings {
+  display: flex;
+  min-height: 100%;
+  background: var(--background);
+}
+
+.auth-page {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgb(79 111 174 / 12%), transparent 36%),
+    var(--background);
+}
+
+.auth-card {
+  width: min(100%, 420px);
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #fbfcfd;
+  box-shadow: 0 18px 50px rgb(35 44 56 / 10%);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.auth-logo {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--primary);
+  color: white;
+}
+
+.auth-brand h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.auth-brand p,
+.account-row span {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-summary,
+.profile-danger {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-card {
+  gap: 22px;
+}
+
+.profile-avatar {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 18px;
+  background: var(--primary);
+  color: white;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.profile-summary h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+}
+
+.profile-summary p,
+.profile-danger p {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.profile-details {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+
+.profile-details > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.profile-details dt {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.profile-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.profile-danger {
+  justify-content: space-between;
+}
+
 .middle-header {
   width: 100%;
   flex: 0 0 auto;

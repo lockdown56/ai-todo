@@ -26,6 +26,15 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => {
   resetMockData();
   localStorage.clear();
+  localStorage.setItem("todolist-access-token", "test-access-token");
+  localStorage.setItem(
+    "todolist-auth-user",
+    JSON.stringify({
+      id: "00000000-0000-4000-8000-000000000001",
+      username: "admin",
+      display_name: "默认用户",
+    }),
+  );
   Object.defineProperty(window, "innerWidth", {
     configurable: true,
     writable: true,

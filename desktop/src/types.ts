@@ -11,6 +11,20 @@ export interface Health {
   database: string;
 }
 
+export interface AuthUser {
+  id: string;
+  username: string;
+  display_name: string;
+}
+
+export interface AuthToken {
+  access_token: string;
+  token_type: "bearer";
+  expires_in: number;
+  expires_at: string;
+  user: AuthUser;
+}
+
 export interface TaskList {
   id: string;
   name: string;

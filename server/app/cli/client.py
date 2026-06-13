@@ -37,9 +37,18 @@ CLI_ERROR_CODES = {
 
 
 class ApiClient:
-    def __init__(self, base_url: str, timeout: float) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float,
+        token: str | None = None,
+        *,
+        auth_hint: bool = True,
+    ) -> None:
         self._base = base_url.rstrip("/")
-        self._client = httpx.Client(base_url=self._base, timeout=timeout)
+        headers = {"Authorization": f"Bearer {token}"} if token else None
+        self._client = httpx.Client(base_url=self._base, timeout=timeout, headers=headers)
+        self._auth_hint = auth_hint
 
     def close(self) -> None:
         self._client.close()
@@ -86,6 +95,8 @@ class ApiClient:
             error = body.get("error", {})
             code = error.get("code", "UNKNOWN")
             message = error.get("message", f"HTTP {resp.status_code}")
+            if resp.status_code in {401, 403} and self._auth_hint:
+                message = f"{message}；请执行 todo auth login"
             fields = error.get("fields")
             exit_code = _HTTP_STATUS_TO_EXIT.get(resp.status_code, EXIT_OTHER)
             cli_exit_error(

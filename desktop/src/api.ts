@@ -1,5 +1,7 @@
 import type {
   ApiErrorPayload,
+  AuthToken,
+  AuthUser,
   ChecklistItem,
   Health,
   Tag,
@@ -10,6 +12,7 @@ import type {
   TaskSort,
   TaskView,
 } from "./types";
+import { expireAuthSession, getAccessToken } from "./auth";
 import { getApiBaseUrl, normalizeApiBaseUrl } from "./config";
 
 export class ApiError extends Error {
@@ -24,8 +27,14 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  options: { authenticated?: boolean; expireOnUnauthorized?: boolean } = {},
+): Promise<T> {
   const apiBaseUrl = getApiBaseUrl();
+  const authenticated = options.authenticated !== false;
+  const token = authenticated ? getAccessToken() : null;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 8000);
   let signal: AbortSignal | undefined;
@@ -42,6 +51,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       headers: {
         Accept: "application/json",
         ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init.headers,
       },
     });
@@ -52,12 +62,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       } catch {
         // The fallback below keeps transport and proxy errors understandable.
       }
-      throw new ApiError(
+      const error = new ApiError(
         response.status,
         payload?.error.code || "HTTP_ERROR",
         payload?.error.message || `请求失败 (${response.status})`,
         payload?.error.fields,
       );
+      if (response.status === 401 && options.expireOnUnauthorized !== false) {
+        expireAuthSession();
+      }
+      throw error;
     }
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
@@ -105,7 +119,14 @@ function json(method: string, body?: unknown): RequestInit {
 }
 
 export const api = {
-  health: () => request<Health>("/health"),
+  health: () => request<Health>("/health", {}, { authenticated: false }),
+  login: (username: string, password: string) =>
+    request<AuthToken>(
+      "/api/v1/auth/login",
+      json("POST", { username, password }),
+      { authenticated: false, expireOnUnauthorized: false },
+    ),
+  me: () => request<AuthUser>("/api/v1/auth/me"),
 
   lists: () => request<TaskList[]>("/api/v1/lists"),
   trashLists: () => request<TaskList[]>("/api/v1/lists/trash"),

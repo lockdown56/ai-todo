@@ -55,6 +55,11 @@ async def client(session_factory) -> AsyncIterator[AsyncClient]:
         transport=ASGITransport(app=app),
         base_url="http://test",
     ) as http_client:
+        login = await http_client.post(
+            "/api/v1/auth/login",
+            json={"username": "admin", "password": "change-me"},
+        )
+        http_client.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
         yield http_client
 
 

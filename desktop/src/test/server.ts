@@ -66,6 +66,39 @@ export function resetMockData() {
 }
 
 export const handlers = [
+  http.post("http://127.0.0.1:8000/api/v1/auth/login", async ({ request }) => {
+    const body = (await request.json()) as { username: string; password: string };
+    if (body.username !== "admin" || body.password !== "change-me") {
+      return HttpResponse.json(
+        {
+          error: {
+            code: "INVALID_CREDENTIALS",
+            message: "用户名或密码错误",
+            fields: null,
+          },
+        },
+        { status: 401 },
+      );
+    }
+    return HttpResponse.json({
+      access_token: "test-access-token",
+      token_type: "bearer",
+      expires_in: 604800,
+      expires_at: "2026-06-18T08:00:00Z",
+      user: {
+        id: "00000000-0000-4000-8000-000000000001",
+        username: "admin",
+        display_name: "默认用户",
+      },
+    });
+  }),
+  http.get("http://127.0.0.1:8000/api/v1/auth/me", () =>
+    HttpResponse.json({
+      id: "00000000-0000-4000-8000-000000000001",
+      username: "admin",
+      display_name: "默认用户",
+    }),
+  ),
   http.get("http://127.0.0.1:8000/health", () =>
     HttpResponse.json({ status: "ok", database: "ok" }),
   ),

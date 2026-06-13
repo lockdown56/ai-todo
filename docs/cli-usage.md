@@ -39,11 +39,15 @@ todo [OPTIONS] COMMAND [ARGS]...
 |---|---|---|---|
 | `--api-url` | `TODOLIST_API_URL` | `http://127.0.0.1:8000` | API 根地址 |
 | `--timeout` | `TODOLIST_TIMEOUT` | `8` | 请求超时秒数 |
+| `--token` | `TODOLIST_TOKEN` | 已保存令牌 | 临时覆盖当前 API 地址保存的 Bearer 令牌 |
 | `--output` | `TODOLIST_OUTPUT` | `json` | `json`、`jsonl` 或 `table` |
 | `--pretty` | - | 关闭 | 缩进 JSON，仅影响 `json` |
 | `--version` / `-v` | - | - | 输出 CLI 版本 |
 
 配置优先级：命令参数 > 环境变量 > 默认值。
+
+除 `health` 和 `auth login` 外，命令需要先登录。令牌按 API 地址保存在用户配置目录，
+Linux/macOS 下文件权限为 `0600`。
 
 ## 输出格式
 
@@ -104,6 +108,17 @@ Rich 表格格式，面向人工查看。
 ```bash
 todo health
 ```
+
+### auth - 登录认证
+
+```bash
+todo auth login
+todo auth status
+todo auth logout
+```
+
+`auth login` 会交互式读取用户名和密码，密码输入不会回显。自动化环境可通过
+`TODOLIST_TOKEN` 或全局 `--token` 传入访问令牌。
 
 ---
 

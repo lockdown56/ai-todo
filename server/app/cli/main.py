@@ -7,6 +7,7 @@ from uuid import UUID
 
 import typer
 
+from app.cli.auth_store import delete_session, get_session, normalize_api_url, save_session
 from app.cli.client import ApiClient, cli_exit_error, parse_uuid
 from app.cli.inputs import (
     load_json_input,
@@ -30,13 +31,33 @@ def _get_env(key: str, default: str) -> str:
     return os.environ.get(key, default)
 
 
-def _make_client(ctx: typer.Context) -> ApiClient:
+def _get_api_url(ctx: typer.Context) -> str:
     obj = ctx.obj or {}
-    api_url = obj.get("api_url") or _get_env("TODOLIST_API_URL", "http://127.0.0.1:8000")
+    return normalize_api_url(
+        obj.get("api_url") or _get_env("TODOLIST_API_URL", "http://127.0.0.1:8000")
+    )
+
+
+def _get_timeout(ctx: typer.Context) -> float:
+    obj = ctx.obj or {}
     timeout = obj.get("timeout")
     if timeout is None:
         timeout = float(_get_env("TODOLIST_TIMEOUT", "8"))
-    return ApiClient(api_url, timeout)
+    return timeout
+
+
+def _get_token(ctx: typer.Context) -> str | None:
+    obj = ctx.obj or {}
+    explicit = obj.get("token") or os.environ.get("TODOLIST_TOKEN")
+    if explicit:
+        return explicit
+    session = get_session(_get_api_url(ctx))
+    token = session.get("access_token") if session else None
+    return token if isinstance(token, str) else None
+
+
+def _make_client(ctx: typer.Context) -> ApiClient:
+    return ApiClient(_get_api_url(ctx), _get_timeout(ctx), _get_token(ctx))
 
 
 def _get_output_fmt(ctx: typer.Context) -> str:
@@ -60,6 +81,7 @@ def root(
     ctx: typer.Context,
     api_url: str | None = typer.Option(None, envvar="TODOLIST_API_URL", help="API 根地址"),
     timeout: float | None = typer.Option(None, envvar="TODOLIST_TIMEOUT", help="请求超时秒数"),
+    token: str | None = typer.Option(None, envvar="TODOLIST_TOKEN", help="Bearer 访问令牌"),
     output: str | None = typer.Option(
         None, envvar="TODOLIST_OUTPUT", help="输出格式: json/jsonl/table"
     ),
@@ -69,6 +91,7 @@ def root(
     ctx.ensure_object(dict)
     ctx.obj["api_url"] = api_url
     ctx.obj["timeout"] = timeout
+    ctx.obj["token"] = token
     ctx.obj["output"] = output
     ctx.obj["pretty"] = pretty
     if version:
@@ -85,6 +108,82 @@ def health_cmd(ctx: typer.Context) -> None:
     with _make_client(ctx) as client:
         data = client.get("/health")
         _success(ctx, data)
+
+
+# ---------------------------------------------------------------------------
+# Authentication commands
+# ---------------------------------------------------------------------------
+auth_app = typer.Typer(help="登录认证", no_args_is_help=True)
+app.add_typer(auth_app, name="auth")
+
+
+@auth_app.command("login")
+def auth_login(
+    ctx: typer.Context,
+    username: str = typer.Option(..., "--username", "-u", prompt="用户名"),
+    password: str = typer.Option(
+        ...,
+        "--password",
+        prompt="密码",
+        hide_input=True,
+        help="登录密码；省略时隐藏输入",
+    ),
+) -> None:
+    """登录并保存当前 API 地址的访问令牌"""
+    api_url = _get_api_url(ctx)
+    with ApiClient(api_url, _get_timeout(ctx), auth_hint=False) as client:
+        data: dict[str, Any] = client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": password},
+        )
+    save_session(
+        api_url,
+        {
+            "access_token": data["access_token"],
+            "expires_at": data["expires_at"],
+            "user": data["user"],
+        },
+    )
+    _success(
+        ctx,
+        {
+            "api_url": api_url,
+            "user": data["user"],
+            "expires_at": data["expires_at"],
+        },
+    )
+
+
+@auth_app.command("status")
+def auth_status(ctx: typer.Context) -> None:
+    """验证并显示当前登录状态"""
+    token = _get_token(ctx)
+    if not token:
+        cli_exit_error(
+            "AUTH_REQUIRED",
+            "当前 API 地址尚未登录；请执行 todo auth login",
+            http_status=401,
+            exit_code=6,
+        )
+    with ApiClient(_get_api_url(ctx), _get_timeout(ctx), token) as client:
+        user = client.get("/api/v1/auth/me")
+    session = get_session(_get_api_url(ctx))
+    _success(
+        ctx,
+        {
+            "api_url": _get_api_url(ctx),
+            "user": user,
+            "expires_at": session.get("expires_at") if session else None,
+        },
+    )
+
+
+@auth_app.command("logout")
+def auth_logout(ctx: typer.Context) -> None:
+    """删除当前 API 地址保存的访问令牌"""
+    api_url = _get_api_url(ctx)
+    removed = delete_session(api_url)
+    _success(ctx, {"api_url": api_url, "logged_out": removed})
 
 
 # ---------------------------------------------------------------------------

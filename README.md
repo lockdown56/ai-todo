@@ -20,6 +20,9 @@ docker compose up --build -d
 curl http://127.0.0.1:8000/health
 ```
 
+开发环境默认登录账号为 `admin` / `change-me`。部署前必须在 `.env` 中修改
+`AUTH_PASSWORD` 和 `AUTH_JWT_SECRET`；生产环境的 JWT 密钥至少需要 32 个字符。
+
 浏览器开发模式：
 
 ```bash
@@ -65,6 +68,13 @@ uv run --project server ruff format --check .
 npm --prefix desktop test -- --run
 npm --prefix desktop run build
 cargo check --manifest-path desktop/src-tauri/Cargo.toml
+```
+
+CLI 首次使用前登录：
+
+```bash
+todo auth login
+todo auth status
 ```
 
 Windows 打包：

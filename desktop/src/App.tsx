@@ -19,10 +19,12 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  KeyRound,
   Inbox,
   List,
   ListChecks,
   LoaderCircle,
+  LogOut,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -32,6 +34,7 @@ import {
   Star,
   Tag as TagIcon,
   Trash2,
+  UserRound,
   WifiOff,
   X,
 } from "lucide-react";
@@ -100,6 +103,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import {
+  AUTH_CHANGED_EVENT,
+  clearAuthSession,
+  getAccessToken,
+  getStoredUser,
+  notifyAuthChanged,
+  setAuthSession,
+  setStoredUser,
+} from "./auth";
 import { api, testApiBaseUrl } from "./api";
 import {
   getApiBaseUrl,
@@ -352,8 +364,12 @@ function Shell() {
   );
   const currentList = lists.data?.find((item) => item.id === scope.listId);
   const isSettingsRoute = location.pathname === "/settings";
+  const isProfileRoute = location.pathname === "/profile";
+  const isUtilityRoute = isSettingsRoute || isProfileRoute;
   const currentTitle = isSettingsRoute
     ? "设置"
+    : isProfileRoute
+      ? "个人中心"
     : scope.listId
       ? currentList?.name || "清单"
       : viewNames[scope.view || "inbox"];
@@ -582,10 +598,10 @@ function Shell() {
     return () => document.removeEventListener("keydown", onCompleteShortcut);
   }, [selectedTaskId, stateMutation, taskItems]);
 
-  if (health.isPending && !isSettingsRoute) {
+  if (health.isPending && !isUtilityRoute) {
     return <LoadingScreen />;
   }
-  if (health.isError && !isSettingsRoute) {
+  if (health.isError && !isUtilityRoute) {
     return (
       <ConnectionError
         message={errorMessage(health.error)}
@@ -601,7 +617,7 @@ function Shell() {
       <div
         className={[
           "app-shell",
-          isSettingsRoute ? "settings-mode" : "",
+          isUtilityRoute ? "settings-mode" : "",
           effectiveSidebarCollapsed ? "sidebar-collapsed" : "",
           compactSidebar ? "compact-sidebar" : "",
           sidebarOverlayOpen ? "sidebar-overlay-open" : "",
@@ -643,6 +659,8 @@ function Shell() {
         <main className="middle-panel">
           {isSettingsRoute ? (
             <SettingsPage />
+          ) : isProfileRoute ? (
+            <ProfilePage />
           ) : (
             <>
               <TaskHeader
@@ -725,7 +743,7 @@ function Shell() {
             </>
           )}
         </main>
-        {!isSettingsRoute && detailDrawer && selectedTaskId && (
+        {!isUtilityRoute && detailDrawer && selectedTaskId && (
           <button
             className="detail-backdrop"
             onClick={() => void closeDetail()}
@@ -733,7 +751,7 @@ function Shell() {
           />
         )}
         <aside className="detail-panel">
-          {isSettingsRoute ? null : selectedTaskId ? (
+          {isUtilityRoute ? null : selectedTaskId ? (
             <TaskDetail
               ref={editorRef}
               taskId={selectedTaskId}
@@ -919,6 +937,16 @@ function Sidebar({
       </TooltipProvider>
       <div className="sidebar-settings">
         <div className="sidebar-divider" />
+        <Button
+          variant="ghost"
+          className={`nav-item ${currentPath === "/profile" ? "active" : ""}`}
+          onClick={() => void onNavigate("/profile")}
+          title="个人中心"
+          aria-label={collapsed ? "个人中心" : undefined}
+        >
+          <UserRound />
+          {!collapsed && <span>个人中心</span>}
+        </Button>
         <Button
           variant="ghost"
           className={`nav-item ${currentPath === "/settings" ? "active" : ""}`}
@@ -2078,6 +2106,7 @@ function ConnectionError({
 }
 
 function SettingsPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [apiBaseUrl, setApiBaseUrlValue] = useState(() => getApiBaseUrl());
   const [savedApiBaseUrl, setSavedApiBaseUrl] = useState(() => getApiBaseUrl());
@@ -2109,10 +2138,17 @@ function SettingsPage() {
     }
     setStatus("saving");
     setMessage("");
+    const apiChanged = cleaned !== savedApiBaseUrl;
     setApiBaseUrl(cleaned);
     setApiBaseUrlValue(cleaned);
     setSavedApiBaseUrl(cleaned);
     refreshAppData();
+    if (apiChanged) {
+      clearAuthSession();
+      notifyAuthChanged();
+      navigate("/login", { replace: true });
+      return;
+    }
     setStatus("success");
     setMessage("已保存，后续请求会使用新的地址。");
   };
@@ -2137,6 +2173,7 @@ function SettingsPage() {
   };
 
   const reset = () => {
+    const apiChanged = savedApiBaseUrl !== getDefaultApiBaseUrl();
     resetApiBaseUrl();
     const defaultUrl = getDefaultApiBaseUrl();
     setApiBaseUrlValue(defaultUrl);
@@ -2144,6 +2181,11 @@ function SettingsPage() {
     setStatus("idle");
     setMessage("");
     refreshAppData();
+    if (apiChanged) {
+      clearAuthSession();
+      notifyAuthChanged();
+      navigate("/login", { replace: true });
+    }
   };
 
   return (
@@ -2202,6 +2244,216 @@ function SettingsPage() {
         )}
       </form>
     </section>
+  );
+}
+
+function ProfilePage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const user = getStoredUser();
+
+  const logout = () => {
+    clearAuthSession();
+    queryClient.clear();
+    notifyAuthChanged();
+    navigate("/login", { replace: true });
+  };
+
+  if (!user) return <LoadingScreen />;
+
+  const initial = Array.from(user.display_name.trim())[0]?.toUpperCase() || "U";
+
+  return (
+    <section className="settings-page profile-page">
+      <div className="settings-header">
+        <div className="settings-title">
+          <div className="settings-icon">
+            <UserRound />
+          </div>
+          <div>
+            <h1>个人中心</h1>
+            <p>查看当前登录账号和认证状态。</p>
+          </div>
+        </div>
+        <Badge variant="secondary">已登录</Badge>
+      </div>
+      <section className="settings-card profile-card" aria-label="账号信息">
+        <div className="profile-summary">
+          <div className="profile-avatar" aria-hidden="true">{initial}</div>
+          <div>
+            <h2>{user.display_name}</h2>
+            <p>@{user.username}</p>
+          </div>
+        </div>
+        <dl className="profile-details">
+          <div>
+            <dt>用户名</dt>
+            <dd>{user.username}</dd>
+          </div>
+          <div>
+            <dt>用户 ID</dt>
+            <dd>{user.id}</dd>
+          </div>
+          <div>
+            <dt>认证方式</dt>
+            <dd>单用户 Bearer Token</dd>
+          </div>
+        </dl>
+      </section>
+      <section className="settings-card profile-danger" aria-label="登录管理">
+        <div>
+          <strong>退出当前账号</strong>
+          <p>退出后会清除本机保存的登录凭据，需要重新输入用户名和密码。</p>
+        </div>
+        <Button type="button" variant="destructive" onClick={logout}>
+          <LogOut />
+          退出登录
+        </Button>
+      </section>
+    </section>
+  );
+}
+
+function LoginPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const from =
+    (location.state as { from?: string } | null)?.from || "/view/inbox";
+
+  const submit = async () => {
+    setPending(true);
+    setMessage("");
+    try {
+      const response = await api.login(username.trim(), password);
+      setAuthSession(response.access_token, response.user);
+      queryClient.clear();
+      navigate(from === "/login" ? "/view/inbox" : from, { replace: true });
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <main className="auth-page">
+      <section className="auth-card">
+        <div className="auth-brand">
+          <div className="auth-logo">
+            <KeyRound />
+          </div>
+          <div>
+            <h1>登录 AI 清单</h1>
+            <p>使用服务端配置的账号继续。</p>
+          </div>
+        </div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <div className="form-field">
+            <Label htmlFor="login-username">用户名</Label>
+            <Input
+              id="login-username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              autoFocus
+              required
+            />
+          </div>
+          <div className="form-field">
+            <Label htmlFor="login-password">密码</Label>
+            <Input
+              id="login-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </div>
+          {message && <div className="settings-message error">{message}</div>}
+          <Button type="submit" disabled={pending}>
+            {pending && <LoaderCircle className="spin" />}
+            登录
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => navigate("/settings")}>
+            设置后端接口地址
+          </Button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function SessionGate({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const query = useQuery({
+    queryKey: queryKeys.auth,
+    queryFn: api.me,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (query.data) setStoredUser(query.data);
+  }, [query.data]);
+
+  if (query.isPending) return <LoadingScreen />;
+  if (query.isError) {
+    if (!getAccessToken()) {
+      return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
+    }
+    return (
+      <ConnectionError
+        message={errorMessage(query.error)}
+        onRetry={() => void query.refetch()}
+        onOpenSettings={() => navigate("/settings")}
+        pending={query.isFetching}
+      />
+    );
+  }
+  return children;
+}
+
+function ProtectedShell() {
+  const location = useLocation();
+  if (!getAccessToken()) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: `${location.pathname}${location.search}` }}
+      />
+    );
+  }
+  return (
+    <SessionGate>
+      <Shell />
+    </SessionGate>
+  );
+}
+
+function SettingsRoute() {
+  if (!getAccessToken()) {
+    return (
+      <main className="standalone-settings">
+        <SettingsPage />
+      </main>
+    );
+  }
+  return (
+    <SessionGate>
+      <Shell />
+    </SessionGate>
   );
 }
 
@@ -2302,11 +2554,28 @@ function formatDayLabel(date: Date): string {
 }
 
 export default function App() {
+  const queryClient = useQueryClient();
+  const [, setAuthRevision] = useState(0);
+
+  useEffect(() => {
+    const update = () => {
+      queryClient.clear();
+      setAuthRevision((value) => value + 1);
+    };
+    window.addEventListener(AUTH_CHANGED_EVENT, update);
+    return () => window.removeEventListener(AUTH_CHANGED_EVENT, update);
+  }, [queryClient]);
+
   return (
     <Routes>
-      <Route path="/view/:view" element={<Shell />} />
-      <Route path="/list/:listId" element={<Shell />} />
-      <Route path="/settings" element={<Shell />} />
+      <Route
+        path="/login"
+        element={getAccessToken() ? <Navigate to="/view/inbox" replace /> : <LoginPage />}
+      />
+      <Route path="/view/:view" element={<ProtectedShell />} />
+      <Route path="/list/:listId" element={<ProtectedShell />} />
+      <Route path="/profile" element={<ProtectedShell />} />
+      <Route path="/settings" element={<SettingsRoute />} />
       <Route path="*" element={<Navigate to="/view/inbox" replace />} />
     </Routes>
   );

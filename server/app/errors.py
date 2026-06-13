@@ -24,9 +24,11 @@ def error_body(code: str, message: str, fields: Any = None) -> dict[str, Any]:
 
 
 async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
+    headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
     return JSONResponse(
         status_code=exc.status_code,
         content=error_body(exc.code, exc.message, exc.fields),
+        headers=headers,
     )
 
 

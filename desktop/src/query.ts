@@ -1,5 +1,6 @@
 export const queryKeys = {
   health: ["health"] as const,
+  auth: ["auth"] as const,
   lists: ["lists"] as const,
   trashLists: ["lists", "trash"] as const,
   tasks: (scope: string, query: string, sort: string) =>

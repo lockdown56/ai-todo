@@ -33,6 +33,56 @@ function setWindowWidth(width: number) {
 }
 
 describe("AI 清单 app", () => {
+  it("requires login and authenticates with the configured account", async () => {
+    localStorage.clear();
+    const user = userEvent.setup();
+    renderApp("/view/inbox");
+
+    expect(await screen.findByRole("heading", { name: "登录 AI 清单" })).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "用户名" }), "admin");
+    await user.type(screen.getByLabelText("密码"), "wrong");
+    await user.click(screen.getByRole("button", { name: "登录" }));
+    expect(await screen.findByText("用户名或密码错误")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("密码"));
+    await user.type(screen.getByLabelText("密码"), "change-me");
+    await user.click(screen.getByRole("button", { name: "登录" }));
+
+    expect(await screen.findByRole("heading", { name: "收集箱" })).toBeInTheDocument();
+    expect(localStorage.getItem("todolist-access-token")).toBe("test-access-token");
+  });
+
+  it("clears the session and returns to login on an authenticated 401", async () => {
+    server.use(
+      http.get("http://127.0.0.1:8000/api/v1/auth/me", () =>
+        HttpResponse.json(
+          { error: { code: "TOKEN_EXPIRED", message: "登录已过期，请重新登录", fields: null } },
+          { status: 401 },
+        ),
+      ),
+    );
+    renderApp();
+
+    expect(await screen.findByRole("heading", { name: "登录 AI 清单" })).toBeInTheDocument();
+    expect(localStorage.getItem("todolist-access-token")).toBeNull();
+  });
+
+  it("opens the personal center and logs out completely", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByRole("button", { name: "个人中心" }));
+    expect(await screen.findByRole("heading", { name: "个人中心" })).toBeInTheDocument();
+    expect(screen.getByText("默认用户")).toBeInTheDocument();
+    expect(screen.getByText("@admin")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "退出登录" }));
+
+    expect(await screen.findByRole("heading", { name: "登录 AI 清单" })).toBeInTheDocument();
+    expect(localStorage.getItem("todolist-access-token")).toBeNull();
+    expect(localStorage.getItem("todolist-auth-user")).toBeNull();
+  });
+
   it("renders the three-column shell and persists sidebar collapse", async () => {
     const user = userEvent.setup();
     const { container } = renderApp();
@@ -612,8 +662,8 @@ describe("AI 清单 app", () => {
     await user.click(screen.getByRole("button", { name: "保存" }));
 
     expect(localStorage.getItem("ai-api-base-url")).toBe("http://127.0.0.1:9000");
-    expect(await screen.findByText("已保存，后续请求会使用新的地址。")).toBeInTheDocument();
-    expect(screen.getByText("当前：http://127.0.0.1:9000")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "登录 AI 清单" })).toBeInTheDocument();
+    expect(localStorage.getItem("todolist-access-token")).toBeNull();
   });
 
   it("keeps the settings page available when the backend health check fails", async () => {

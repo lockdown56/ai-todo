@@ -3,6 +3,41 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 
+@pytest.mark.asyncio
+async def test_authentication_is_required_and_login_returns_current_user(client):
+    authorization = client.headers.pop("Authorization")
+    unauthorized = await client.get("/api/v1/lists")
+    assert unauthorized.status_code == 401
+    assert unauthorized.json()["error"]["code"] == "AUTH_REQUIRED"
+    assert unauthorized.headers["www-authenticate"] == "Bearer"
+
+    invalid = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": "wrong"},
+    )
+    assert invalid.status_code == 401
+    assert invalid.json()["error"]["code"] == "INVALID_CREDENTIALS"
+
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": "change-me"},
+    )
+    assert login.status_code == 200
+    payload = login.json()
+    assert payload["token_type"] == "bearer"
+    assert payload["expires_in"] == 604800
+    client.headers["Authorization"] = f"Bearer {payload['access_token']}"
+    me = await client.get("/api/v1/auth/me")
+    assert me.status_code == 200
+    assert me.json()["username"] == "admin"
+
+    client.headers["Authorization"] = "Bearer not-a-jwt"
+    malformed = await client.get("/api/v1/auth/me")
+    assert malformed.status_code == 401
+    assert malformed.json()["error"]["code"] == "INVALID_TOKEN"
+    client.headers["Authorization"] = authorization
+
+
 async def get_inbox(client):
     response = await client.get("/api/v1/lists")
     assert response.status_code == 200
