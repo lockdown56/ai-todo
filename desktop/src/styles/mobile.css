@@ -36,7 +36,9 @@
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 100;
+    /* 低于底部详情 sheet 与遮罩(40/41),并低于 Radix Portal 弹层(z-50=50)。
+       sheet 打开时是模态的,底部导航应被遮挡。 */
+    z-index: 30;
     display: flex;
     justify-content: space-around;
     padding: 8px 0;
@@ -70,7 +72,8 @@
   .mobile-detail-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 200;
+    /* 高于底部导航(30),低于详情 sheet(41)和 Radix Portal 弹层(50)。 */
+    z-index: 40;
     border: none;
     padding: 0;
     margin: 0;
@@ -84,7 +87,10 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 201;
+    /* 高于遮罩(40),但低于 Radix Portal 弹层(z-50=50)。
+       这样 sheet 内的日期选择器、清单/优先级 Select、标签 Popover、
+       删除确认 AlertDialog 才不会被 sheet 遮挡。 */
+    z-index: 41;
     display: flex;
     flex-direction: column;
     max-height: 60dvh;
