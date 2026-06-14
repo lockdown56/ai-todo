@@ -1,0 +1,2 @@
+# 统一文本文件行尾为 LF，避免 autocrlf 导致的虚假 modified 与跨平台冲突
+* text=auto eol=lf
