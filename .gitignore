@@ -12,4 +12,5 @@ desktop/*.tsbuildinfo
 desktop/vite.config.js
 desktop/vite.config.d.ts
 desktop/src-tauri/target/
+desktop/src-tauri/gen/
 coverage/
