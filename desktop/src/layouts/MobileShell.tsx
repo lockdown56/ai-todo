@@ -327,6 +327,7 @@ function MobileDetailSheet({
           taskId={taskId}
           lists={lists}
           tags={[]}
+          hideToolbar
           onClose={onClose}
           onDataChanged={onDataChanged}
         />

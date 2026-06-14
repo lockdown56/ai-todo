@@ -46,8 +46,9 @@ export const TaskDetail = forwardRef<EditorHandle, {
   tags: Tag[];
   onClose: () => void;
   onDataChanged: () => void;
+  hideToolbar?: boolean;
 }>(function TaskDetail(
-  { taskId, lists, tags, onClose, onDataChanged },
+  { taskId, lists, tags, onClose, onDataChanged, hideToolbar },
   ref,
 ) {
   const queryClient = useQueryClient();
@@ -137,10 +138,12 @@ export const TaskDetail = forwardRef<EditorHandle, {
 
   return (
     <div className="detail-content">
-      <div className="detail-toolbar">
-        <span>任务详情</span>
-        <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => void onClose()} aria-label="关闭任务详情"><X /></Button>
-      </div>
+      {!hideToolbar && (
+        <div className="detail-toolbar">
+          <span>任务详情</span>
+          <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => void onClose()} aria-label="关闭任务详情"><X /></Button>
+        </div>
+      )}
       <Input
         className="detail-title-input"
         value={draft.title}
