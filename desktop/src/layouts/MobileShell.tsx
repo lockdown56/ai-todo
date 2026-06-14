@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import type { RefObject, TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { viewNames } from "@/lib/constants";
 import { errorMessage } from "@/lib/error-utils";
 import { api } from "@/api";
 import { queryKeys } from "@/query";
-import type { TaskView } from "@/types";
+import type { TaskView, TaskList } from "@/types";
 
 const mobileNavItems = [
   { view: "inbox" as TaskView, icon: Inbox, label: "收集箱" },
@@ -87,33 +88,10 @@ export function MobileShell() {
   }
 
   const isMorePage = location.pathname === "/more";
-  const isDetailPage = Boolean(selectedTaskId);
 
   return (
     <div className="mobile-shell">
-      {isDetailPage ? (
-        <div className="mobile-detail-view">
-          <div className="mobile-detail-header">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => void closeDetail()}
-              aria-label="返回"
-            >
-              <ArrowLeft />
-            </Button>
-            <span>任务详情</span>
-          </div>
-          <TaskDetail
-            ref={editorRef}
-            taskId={selectedTaskId!}
-            lists={lists.data || []}
-            tags={[]}
-            onClose={closeDetail}
-            onDataChanged={() => void queryClient.invalidateQueries({ queryKey: queryKeys.task(selectedTaskId!) })}
-          />
-        </div>
-      ) : isMorePage ? (
+      {isMorePage ? (
         <div className="mobile-more-page">
           <header className="mobile-more-header">
             <h1>更多</h1>
@@ -226,6 +204,18 @@ export function MobileShell() {
         </>
       )}
 
+      {selectedTaskId && (
+        <MobileDetailSheet
+          taskId={selectedTaskId}
+          editorRef={editorRef}
+          lists={lists.data || []}
+          onClose={closeDetail}
+          onDataChanged={() =>
+            void queryClient.invalidateQueries({ queryKey: queryKeys.task(selectedTaskId) })
+          }
+        />
+      )}
+
       <nav className="mobile-bottom-nav">
         {mobileNavItems.map(({ view, icon: Icon, label }) => (
           <Button
@@ -257,5 +247,90 @@ export function MobileShell() {
         />
       )}
     </div>
+  );
+}
+
+type EditorHandle = { flush: () => Promise<boolean> };
+
+function MobileDetailSheet({
+  taskId,
+  editorRef,
+  lists,
+  onClose,
+  onDataChanged,
+}: {
+  taskId: string;
+  editorRef: RefObject<EditorHandle | null>;
+  lists: TaskList[];
+  onClose: () => void | Promise<void>;
+  onDataChanged: () => void;
+}) {
+  const sheetRef = useRef<HTMLDivElement>(null);
+  // 下拉手势起始 Y 坐标，null 表示未在拖拽中
+  const dragStartY = useRef<number | null>(null);
+
+  const onDragTouchStart = (event: ReactTouchEvent) => {
+    // 只在内容滚动到顶部时才允许下拉关闭，避免与详情内滚动冲突
+    const scroller = sheetRef.current?.querySelector<HTMLElement>(".detail-content");
+    if (scroller && scroller.scrollTop > 0) return;
+    dragStartY.current = event.touches[0].clientY;
+  };
+
+  const onDragTouchMove = (event: ReactTouchEvent) => {
+    if (dragStartY.current === null) return;
+    const delta = event.touches[0].clientY - dragStartY.current;
+    if (delta <= 0) return; // 上拉忽略
+    // 实时跟随手指位移
+    if (sheetRef.current) {
+      sheetRef.current.style.transform = `translateY(${delta}px)`;
+      sheetRef.current.style.transition = "none";
+    }
+  };
+
+  const onDragTouchEnd = (event: ReactTouchEvent) => {
+    if (dragStartY.current === null) return;
+    const delta = event.changedTouches[0].clientY - dragStartY.current;
+    dragStartY.current = null;
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = "";
+      sheetRef.current.style.transform = "";
+    }
+    if (delta > 80) {
+      void onClose();
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="关闭任务详情"
+        className="mobile-detail-backdrop"
+        onClick={() => void onClose()}
+      />
+      <div
+        ref={sheetRef}
+        className="mobile-detail-sheet"
+        onTouchStart={onDragTouchStart}
+        onTouchMove={onDragTouchMove}
+        onTouchEnd={onDragTouchEnd}
+      >
+        <div className="mobile-detail-grabber" />
+        <div className="mobile-detail-header">
+          <Button variant="ghost" size="icon-sm" onClick={() => void onClose()} aria-label="返回">
+            <ArrowLeft />
+          </Button>
+          <span>任务详情</span>
+        </div>
+        <TaskDetail
+          ref={editorRef}
+          taskId={taskId}
+          lists={lists}
+          tags={[]}
+          onClose={onClose}
+          onDataChanged={onDataChanged}
+        />
+      </div>
+    </>
   );
 }
