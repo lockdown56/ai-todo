@@ -10,8 +10,8 @@
     "tauri": "tauri",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
-    "android:apk": "tauri android build -- --apk",
-    "android:aab": "tauri android build -- --aab"
+    "android:apk": "tauri android build --apk",
+    "android:aab": "tauri android build --aab"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",

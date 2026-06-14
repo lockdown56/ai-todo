@@ -666,6 +666,83 @@ describe("AI 清单 app", () => {
     expect(localStorage.getItem("todolist-access-token")).toBeNull();
   });
 
+  it("renders mobile bottom nav with four items at narrow width", async () => {
+    setWindowWidth(390);
+    renderApp();
+
+    const nav = await screen.findByRole("navigation");
+    const items = nav.querySelectorAll(".mobile-nav-item");
+    expect(items).toHaveLength(4);
+    expect(items[0]).toHaveTextContent("收集箱");
+    expect(items[1]).toHaveTextContent("今天");
+    expect(items[2]).toHaveTextContent("全部");
+    expect(items[3]).toHaveTextContent("更多");
+  });
+
+  it("navigates to more page from mobile bottom nav", async () => {
+    setWindowWidth(390);
+    const user = userEvent.setup();
+    renderApp();
+
+    await screen.findByText("编写测试");
+    await user.click(screen.getByRole("button", { name: "更多" }));
+
+    expect(await screen.findByText("已完成")).toBeInTheDocument();
+    expect(screen.getByText("回收站")).toBeInTheDocument();
+    expect(screen.getByText("个人中心")).toBeInTheDocument();
+    expect(screen.getByText("设置")).toBeInTheDocument();
+    expect(screen.getByText("工作")).toBeInTheDocument();
+  });
+
+  it("opens task detail full-screen on mobile", async () => {
+    setWindowWidth(390);
+    const user = userEvent.setup();
+    renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
+
+    expect(await screen.findByText("任务详情")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+  });
+
+  it("closes mobile detail via back button", async () => {
+    setWindowWidth(390);
+    const user = userEvent.setup();
+    renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
+
+    await screen.findByText("任务详情");
+    await user.click(screen.getByRole("button", { name: "返回" }));
+
+    expect(screen.queryByText("任务详情")).not.toBeInTheDocument();
+    expect(await screen.findByText("编写测试")).toBeInTheDocument();
+  });
+
+  it("hides the TaskDetail toolbar on mobile to avoid duplicate header", async () => {
+    setWindowWidth(390);
+    renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
+
+    await screen.findByText("任务详情");
+    const toolbars = document.querySelectorAll(".detail-toolbar");
+    for (const toolbar of toolbars) {
+      expect(toolbar).not.toBeVisible();
+    }
+  });
+
+  it("still uses mobile layout at 899px", async () => {
+    setWindowWidth(899);
+    renderApp();
+
+    expect(await screen.findByRole("navigation")).toBeInTheDocument();
+    expect(document.querySelector(".mobile-shell")).toBeInTheDocument();
+  });
+
+  it("switches to desktop layout at 900px", async () => {
+    setWindowWidth(900);
+    renderApp();
+
+    expect(await screen.findByRole("heading", { name: "收集箱" })).toBeInTheDocument();
+    expect(document.querySelector(".app-shell")).toBeInTheDocument();
+    expect(document.querySelector(".mobile-shell")).not.toBeInTheDocument();
+  });
+
   it("keeps the settings page available when the backend health check fails", async () => {
     server.use(
       http.get("http://127.0.0.1:8000/health", () => HttpResponse.json({}, { status: 500 })),
