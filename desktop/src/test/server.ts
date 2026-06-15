@@ -59,12 +59,36 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
   };
 }
 
-let tasks = [makeTask()];
-let nextTaskNumber = 101;
+export const inboxCompletedTask = makeTask({
+  id: "00000000-0000-4000-8000-000000000103",
+  title: "收集箱已完成",
+  status: 2,
+  completed_at: now,
+  tags: [],
+});
+
+export const workListTask = makeTask({
+  id: "00000000-0000-4000-8000-000000000201",
+  list_id: workList.id,
+  title: "工作清单任务",
+  tags: [],
+});
+
+export const workListCompletedTask = makeTask({
+  id: "00000000-0000-4000-8000-000000000202",
+  list_id: workList.id,
+  title: "已完成工作",
+  status: 2,
+  completed_at: now,
+  tags: [],
+});
+
+let tasks = [makeTask(), inboxCompletedTask, workListTask, workListCompletedTask];
+let nextTaskNumber = 203;
 
 export function resetMockData() {
-  tasks = [makeTask()];
-  nextTaskNumber = 101;
+  tasks = [makeTask(), inboxCompletedTask, workListTask, workListCompletedTask];
+  nextTaskNumber = 203;
 }
 
 export const handlers = [
@@ -122,9 +146,32 @@ export const handlers = [
   http.get("http://127.0.0.1:8000/api/v1/tasks", ({ request }) => {
     const url = new URL(request.url);
     const query = url.searchParams.get("query")?.toLowerCase();
-    const items = query
-      ? tasks.filter((task) => task.title.toLowerCase().includes(query))
-      : tasks;
+    const listId = url.searchParams.get("list_id");
+    const status = url.searchParams.get("status");
+    const view = url.searchParams.get("view");
+    let items = tasks;
+
+    if (listId) {
+      items = items.filter((task) => task.list_id === listId && task.deleted_at === null);
+      if (status === "2") {
+        items = items.filter((task) => task.status === 2);
+      } else {
+        items = items.filter((task) => task.status === 0);
+      }
+    } else if (view === "trash") {
+      items = items.filter((task) => task.deleted_at !== null);
+    } else if (view === "completed") {
+      items = items.filter((task) => task.deleted_at === null && task.status === 2);
+    } else {
+      items = items.filter((task) => task.deleted_at === null && task.status === 0);
+      if (view === "inbox") {
+        items = items.filter((task) => task.list_id === inbox.id);
+      }
+    }
+
+    if (query) {
+      items = items.filter((task) => task.title.toLowerCase().includes(query));
+    }
     return HttpResponse.json({ items, next_cursor: null });
   }),
   http.get("http://127.0.0.1:8000/api/v1/tasks/:taskId", ({ params }) => {

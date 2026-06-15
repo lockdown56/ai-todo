@@ -28,6 +28,7 @@ router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 async def get_tasks(
     view: TaskView | None = None,
     list_id: UUID | None = None,
+    status: int = Query(default=0, ge=0, le=2),
     query: str | None = None,
     sort: TaskSort = "manual",
     limit: int = Query(default=100, ge=1, le=200),
@@ -36,10 +37,15 @@ async def get_tasks(
 ):
     if bool(view) == bool(list_id):
         raise ApiError(422, "INVALID_TASK_SCOPE", "view 和 list_id 必须且只能提供一个")
+    if list_id is None and status != 0:
+        raise ApiError(422, "INVALID_TASK_STATUS", "status 仅在使用 list_id 时有效")
+    if list_id is not None and status not in (0, 2):
+        raise ApiError(422, "INVALID_TASK_STATUS", "status 仅允许 0 或 2")
     tasks, next_cursor = await list_tasks(
         session,
         view=view,
         list_id=list_id,
+        status=status,
         query_text=query,
         sort=sort,
         limit=limit,

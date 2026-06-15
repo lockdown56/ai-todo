@@ -263,6 +263,7 @@ async def list_tasks(
     *,
     view: TaskView | None,
     list_id: UUID | None,
+    status: int = 0,
     query_text: str | None,
     sort: TaskSort,
     limit: int,
@@ -280,7 +281,7 @@ async def list_tasks(
         query = query.where(
             Task.list_id == list_id,
             Task.deleted_at.is_(None),
-            Task.status == 0,
+            Task.status == status,
         )
     elif view == "trash":
         query = query.where(Task.deleted_at.is_not(None))

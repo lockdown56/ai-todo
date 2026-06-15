@@ -60,6 +60,9 @@ export function DesktopShell() {
     tags,
     tasks,
     taskItems,
+    completedTasksQuery,
+    completedTaskItems,
+    listScopeId,
     currentList,
     isSettingsRoute,
     isProfileRoute,
@@ -395,13 +398,22 @@ export function DesktopShell() {
               )}
               <TaskListPanel
                 tasks={taskItems}
+                completedTasks={listScopeId ? completedTaskItems : undefined}
                 activeTaskId={selectedTaskId}
                 view={scope.view}
                 loading={tasks.isPending}
+                completedLoading={listScopeId ? completedTasksQuery.isPending : undefined}
                 error={tasks.error}
                 hasNext={tasks.hasNextPage}
+                completedHasNext={listScopeId ? completedTasksQuery.hasNextPage : undefined}
                 fetchingNext={tasks.isFetchingNextPage}
+                completedFetchingNext={
+                  listScopeId ? completedTasksQuery.isFetchingNextPage : undefined
+                }
                 onLoadMore={() => void tasks.fetchNextPage()}
+                onLoadMoreCompleted={
+                  listScopeId ? () => void completedTasksQuery.fetchNextPage() : undefined
+                }
                 onSelect={openTask}
                 onRename={renameTask}
                 onCreateNext={createInlineTask}

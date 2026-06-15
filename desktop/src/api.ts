@@ -155,6 +155,7 @@ export const api = {
   tasks: (params: {
     view?: TaskView;
     listId?: string;
+    status?: 0 | 2;
     query?: string;
     sort: TaskSort;
     cursor?: string;
@@ -162,6 +163,7 @@ export const api = {
     const search = new URLSearchParams({ sort: params.sort, limit: "100" });
     if (params.view) search.set("view", params.view);
     if (params.listId) search.set("list_id", params.listId);
+    if (params.status !== undefined) search.set("status", String(params.status));
     if (params.query) search.set("query", params.query);
     if (params.cursor) search.set("cursor", params.cursor);
     return request<TaskPage>(`/api/v1/tasks?${search}`);

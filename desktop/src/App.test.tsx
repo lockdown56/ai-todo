@@ -249,16 +249,17 @@ describe("AI 清单 app", () => {
 
   it("completes a task from the task row", async () => {
     const user = userEvent.setup();
-    renderApp();
+    renderApp("/list/00000000-0000-4000-8000-000000000011");
 
     const checkbox = await screen.findByRole("checkbox", { name: "完成任务" });
     expect(checkbox).toHaveClass("task-checkbox", "has-priority", "priority-3");
     await user.click(checkbox);
 
-    expect(await screen.findByRole("checkbox", { name: "重新打开任务" })).toHaveAttribute(
-      "aria-checked",
-      "true",
+    const reopenCheckboxes = await screen.findAllByRole("checkbox", { name: "重新打开任务" });
+    expect(reopenCheckboxes.some((item) => item.getAttribute("aria-checked") === "true")).toBe(
+      true,
     );
+    expect(screen.getByText("工作清单任务")).toBeInTheDocument();
   });
 
   it("updates the task checkbox color immediately when priority changes", async () => {
@@ -298,9 +299,13 @@ describe("AI 清单 app", () => {
       }),
     ];
     server.use(
-      http.get("http://127.0.0.1:8000/api/v1/tasks", () =>
-        HttpResponse.json({ items: tasks, next_cursor: null }),
-      ),
+      http.get("http://127.0.0.1:8000/api/v1/tasks", ({ request }) => {
+        const status = new URL(request.url).searchParams.get("status");
+        if (status === "2") {
+          return HttpResponse.json({ items: [], next_cursor: null });
+        }
+        return HttpResponse.json({ items: tasks, next_cursor: null });
+      }),
       http.get(
         "http://127.0.0.1:8000/api/v1/tasks/:taskId",
         ({ params }) =>
@@ -429,7 +434,7 @@ describe("AI 清单 app", () => {
     await user.click(await screen.findByRole("button", { name: "展开搜索" }));
     await user.type(await screen.findByRole("textbox", { name: "搜索任务" }), "测试");
     await waitFor(() => expect(requestedQueries).toContain("测试"), { timeout: 1200 });
-    expect(requestedQueries.filter((query) => query === "测试")).toHaveLength(1);
+    expect(requestedQueries.filter((query) => query === "测试")).toHaveLength(2);
   });
 
   it("does not intercept application shortcuts while editing text", async () => {
@@ -494,7 +499,7 @@ describe("AI 清单 app", () => {
     const user = userEvent.setup();
     localStorage.setItem(
       "todo-last-workspace-route",
-      "/list/00000000-0000-4000-8000-000000000011?task=00000000-0000-4000-8000-000000000100",
+      "/list/00000000-0000-4000-8000-000000000011?task=00000000-0000-4000-8000-000000000201",
     );
     localStorage.setItem(
       "todo-task-sorts",
@@ -511,7 +516,29 @@ describe("AI 清单 app", () => {
     expect(await screen.findByRole("button", { name: "选择排序方式" })).toHaveTextContent(
       "优先级",
     );
-    expect(screen.getByText("编写测试")).toBeInTheDocument();
+    expect(screen.getByText("工作清单任务")).toBeInTheDocument();
+  });
+
+  it("shows completed tasks in inbox below active tasks", async () => {
+    renderApp("/view/inbox");
+
+    expect(await screen.findByRole("heading", { name: "收集箱" })).toBeInTheDocument();
+    expect(await screen.findByText("编写测试")).toBeInTheDocument();
+    expect(document.querySelector(".task-section-label")).toHaveTextContent("已完成");
+    expect(screen.getByText("收集箱已完成")).toBeInTheDocument();
+  });
+
+  it("shows completed tasks in a separate section when a list is selected", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await screen.findByText("编写测试");
+    await user.click(screen.getByRole("button", { name: /^工作/ }));
+
+    expect(await screen.findByRole("heading", { name: "工作" })).toBeInTheDocument();
+    expect(screen.getByText("工作清单任务")).toBeInTheDocument();
+    expect(document.querySelector(".task-section-label")).toHaveTextContent("已完成");
+    expect(screen.getByText("已完成工作")).toBeInTheDocument();
   });
 
   it("restores the selected task when returning to a previous scope", async () => {
@@ -730,7 +757,7 @@ describe("AI 清单 app", () => {
     await screen.findByText("编写测试");
     await user.click(screen.getByRole("button", { name: "打开更多" }));
 
-    expect(await screen.findByText("已完成")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "已完成" })).toBeInTheDocument();
     expect(screen.getByText("回收站")).toBeInTheDocument();
     expect(screen.getByText("个人中心")).toBeInTheDocument();
     expect(screen.getByText("设置")).toBeInTheDocument();

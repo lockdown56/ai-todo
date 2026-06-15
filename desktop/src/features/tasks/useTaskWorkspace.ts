@@ -124,6 +124,13 @@ export function useTaskWorkspace() {
     enabled: showArchived,
   });
   const tags = useQuery({ queryKey: queryKeys.tags, queryFn: api.tags });
+  const listScopeId = useMemo(() => {
+    if (scope.listId) return scope.listId;
+    if (scope.view === "inbox") {
+      return lists.data?.find((item) => item.system_type === "inbox")?.id;
+    }
+    return undefined;
+  }, [scope.listId, scope.view, lists.data]);
   const tasks = useInfiniteQuery({
     queryKey: queryKeys.tasks(scopeKey, debouncedSearch, sort),
     queryFn: ({ pageParam }) =>
@@ -138,10 +145,28 @@ export function useTaskWorkspace() {
     getNextPageParam: (page) => page.next_cursor || undefined,
     enabled: health.isSuccess,
   });
+  const completedTasksQuery = useInfiniteQuery({
+    queryKey: queryKeys.tasks(scopeKey, debouncedSearch, "created_desc", 2),
+    queryFn: ({ pageParam }) =>
+      api.tasks({
+        listId: listScopeId,
+        status: 2,
+        query: debouncedSearch,
+        sort: "created_desc",
+        cursor: pageParam || undefined,
+      }),
+    initialPageParam: "",
+    getNextPageParam: (page) => page.next_cursor || undefined,
+    enabled: health.isSuccess && !!listScopeId,
+  });
 
   const taskItems = useMemo(
     () => tasks.data?.pages.flatMap((page) => page.items) || [],
     [tasks.data],
+  );
+  const completedTaskItems = useMemo(
+    () => completedTasksQuery.data?.pages.flatMap((page) => page.items) || [],
+    [completedTasksQuery.data],
   );
   const currentList = lists.data?.find((item) => item.id === scope.listId);
 
@@ -321,6 +346,9 @@ export function useTaskWorkspace() {
     tags,
     tasks,
     taskItems,
+    completedTasksQuery,
+    completedTaskItems,
+    listScopeId,
     currentList,
     isSettingsRoute,
     isProfileRoute,

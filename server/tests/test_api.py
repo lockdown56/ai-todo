@@ -176,6 +176,36 @@ async def test_list_archive_hides_from_active_and_excludes_tasks(client):
 
 
 @pytest.mark.asyncio
+async def test_list_tasks_support_status_filter(client):
+    task_list = (
+        await client.post("/api/v1/lists", json={"name": "工作", "color": "#6C5CE7"})
+    ).json()
+    active = (
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "待办", "list_id": task_list["id"]},
+        )
+    ).json()
+    done = (
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "已完成项", "list_id": task_list["id"]},
+        )
+    ).json()
+    await client.post(f"/api/v1/tasks/{done['id']}/complete")
+
+    pending = await client.get("/api/v1/tasks", params={"list_id": task_list["id"]})
+    assert [item["title"] for item in pending.json()["items"]] == ["待办"]
+    assert active["id"] in {item["id"] for item in pending.json()["items"]}
+
+    completed = await client.get(
+        "/api/v1/tasks",
+        params={"list_id": task_list["id"], "status": 2},
+    )
+    assert [item["title"] for item in completed.json()["items"]] == ["已完成项"]
+
+
+@pytest.mark.asyncio
 async def test_task_views_search_sort_and_state_transitions(client):
     inbox = await get_inbox(client)
     first = await client.post(
