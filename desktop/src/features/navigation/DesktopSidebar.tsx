@@ -436,7 +436,8 @@ export function DesktopSidebar({
 
   return (
     <nav className="sidebar" aria-label="任务导航">
-      <div className="sidebar-header">
+      <div className="sidebar-body">
+        <div className="sidebar-header">
         {!collapsed && (
           <>
             <div className="logo">AI</div>
@@ -498,7 +499,7 @@ export function DesktopSidebar({
       )}
       <TooltipProvider delayDuration={80} skipDelayDuration={100}>
         {collapsed ? (
-          <div className="nav-section custom-lists">
+          <div className="sidebar-lists-scroll nav-section custom-lists">
             {sortListsByOrder(customLists).map((list) => (
               <div className="custom-list-wrap" key={list.id}>
                 <Tooltip>
@@ -527,7 +528,10 @@ export function DesktopSidebar({
             ))}
           </div>
         ) : (
-          <div className="lists-scroll" onDragLeave={() => setDropIndicator(null)}>
+          <div
+            className="sidebar-lists-scroll lists-scroll"
+            onDragLeave={() => setDropIndicator(null)}
+          >
             <div className="nav-section custom-lists">
               {topLevelEntries.map((entry) => {
                 if (entry.kind === "list") {
@@ -642,6 +646,7 @@ export function DesktopSidebar({
           </div>
         )}
       </TooltipProvider>
+      </div>
       <div className="sidebar-settings">
         <div className="sidebar-divider" />
         <Button

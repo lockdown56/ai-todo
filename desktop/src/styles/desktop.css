@@ -22,13 +22,23 @@
 .sidebar {
   z-index: 30;
   display: flex;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
-  overflow: visible;
+  overflow: hidden;
   padding: 18px 12px;
   background: var(--sidebar);
   border-right: 1px solid var(--border);
   transition: width 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+.sidebar-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .sidebar-header {
@@ -130,10 +140,15 @@
 }
 
 .custom-lists {
-  min-height: 0;
-  flex: 1;
-  overflow-y: auto;
   align-items: stretch;
+}
+
+.sidebar-lists-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .lists-scroll .custom-lists .list-group {
@@ -142,14 +157,12 @@
 }
 
 .lists-scroll {
-  min-height: 0;
-  flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .lists-scroll .custom-lists {
   flex: 0 0 auto;
-  overflow: visible;
 }
 
 .lists-heading-actions {
@@ -244,7 +257,7 @@
 
 .sidebar-settings {
   flex: 0 0 auto;
-  margin-top: auto;
+  margin-top: 0;
 }
 
 .sidebar-sort-slot {
