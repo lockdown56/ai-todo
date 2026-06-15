@@ -90,32 +90,56 @@ function ListRow({
   list,
   actions,
   groupId,
+  collapsed = false,
 }: {
   list: TaskList;
   actions: ListActions;
   groupId: string | null;
+  collapsed?: boolean;
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
   const showBefore =
     actions.dropIndicator?.targetId === list.id && actions.dropIndicator.position === "before";
   const showAfter =
     actions.dropIndicator?.targetId === list.id && actions.dropIndicator.position === "after";
 
+  const handleDragStart = (event: React.DragEvent) => {
+    actions.onListDragStart(list, groupId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", list.id);
+    wrapRef.current?.classList.add("is-list-dragging");
+  };
+
+  const handleDragEnd = () => {
+    actions.onDragEnd();
+    wrapRef.current?.classList.remove("is-list-dragging");
+  };
+
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    const position = dropPositionFromEvent(event, event.currentTarget);
+    const source = actions.getDragState();
+    actions.setDropIndicator(null);
+    if (!source || !actions.canDropOnList(groupId, list.id)) {
+      actions.onDragEnd();
+      return;
+    }
+    if (groupId !== null) {
+      actions.onReorderLists(source.id, list.id, position);
+    } else if (source.type === "list" && source.groupId === null) {
+      actions.onReorderLists(source.id, list.id, position);
+    } else {
+      actions.onReorderTopLevel(source.id, list.id, position);
+    }
+    actions.onDragEnd();
+  };
+
   return (
     <div className="sidebar-sort-slot">
       {showBefore && <DropLine />}
       <div
+        ref={wrapRef}
         className="custom-list-wrap"
-        draggable
-        onDragStart={(event) => {
-          actions.onListDragStart(list, groupId);
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("text/plain", list.id);
-          event.currentTarget.classList.add("is-list-dragging");
-        }}
-        onDragEnd={(event) => {
-          actions.onDragEnd();
-          event.currentTarget.classList.remove("is-list-dragging");
-        }}
         onDragOver={(event) => {
           if (!actions.canDropOnList(groupId, list.id)) {
             actions.setDropIndicator(null);
@@ -128,83 +152,92 @@ function ListRow({
             position: dropPositionFromEvent(event, event.currentTarget),
           });
         }}
-        onDrop={(event) => {
-          event.preventDefault();
-          const position = dropPositionFromEvent(event, event.currentTarget);
-          const source = actions.getDragState();
-          actions.setDropIndicator(null);
-          if (!source || !actions.canDropOnList(groupId, list.id)) {
-            actions.onDragEnd();
-            return;
-          }
-          if (groupId !== null) {
-            actions.onReorderLists(source.id, list.id, position);
-          } else if (source.type === "list" && source.groupId === null) {
-            actions.onReorderLists(source.id, list.id, position);
-          } else {
-            actions.onReorderTopLevel(source.id, list.id, position);
-          }
-          actions.onDragEnd();
-        }}
+        onDrop={handleDrop}
       >
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             variant="ghost"
-            className={`nav-item w-full justify-start ${actions.scope.listId === list.id ? "active" : ""}`}
+            className={
+              collapsed
+                ? `nav-item ${actions.scope.listId === list.id ? "active" : ""}`
+                : `nav-item w-full justify-start ${actions.scope.listId === list.id ? "active" : ""}`
+            }
+            draggable
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
             onClick={() => void actions.onNavigate(`/list/${list.id}`)}
-            title={list.name}
-            draggable={false}
-            onDragStart={(event) => event.stopPropagation()}
+            title={collapsed ? undefined : list.name}
+            aria-label={collapsed ? `${list.name}，${list.task_count} 个任务` : undefined}
           >
-            <span className="nav-icon-slot">
-              <span className="list-dot" style={{ backgroundColor: list.color }} />
-            </span>
-            <span className="nav-label">{list.name}</span>
-            <span className="nav-count">{list.task_count}</span>
+            {collapsed ? (
+              <span
+                className="collapsed-list-mark"
+                style={{ "--list-color": list.color } as React.CSSProperties}
+                aria-hidden="true"
+              >
+                {Array.from(list.name.trim())[0]?.toUpperCase() || "·"}
+              </span>
+            ) : (
+              <>
+                <span className="nav-icon-slot">
+                  <span className="list-dot" style={{ backgroundColor: list.color }} />
+                </span>
+                <span className="nav-label">{list.name}</span>
+                <span className="nav-count">{list.task_count}</span>
+              </>
+            )}
           </Button>
         </TooltipTrigger>
+        {collapsed && (
+          <TooltipContent side="right" align="center" className="list-tooltip">
+            <strong>{list.name}</strong>
+            <span>{list.task_count} 个任务</span>
+          </TooltipContent>
+        )}
       </Tooltip>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="icon-button list-menu-button"
-            aria-label={`管理清单 ${list.name}`}
-            draggable={false}
-            onDragStart={(event) => event.stopPropagation()}
-          >
-            <MoreHorizontal />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" aria-label={`清单 ${list.name} 操作`}>
-          <DropdownMenuItem onSelect={() => actions.onEdit(list)}>重命名</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => actions.onColor(list)}>更改颜色</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>移动到分组</DropdownMenuLabel>
-          {list.group_id && (
-            <DropdownMenuItem onSelect={() => actions.onMoveToGroup(list, null)}>
-              无分组
-            </DropdownMenuItem>
-          )}
-          {actions.groups
-            .filter((group) => group.id !== list.group_id)
-            .map((group) => (
-              <DropdownMenuItem
-                key={group.id}
-                onSelect={() => actions.onMoveToGroup(list, group.id)}
-              >
-                {group.name}
+      {!collapsed && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="icon-button list-menu-button"
+              aria-label={`管理清单 ${list.name}`}
+              draggable={false}
+              onDragStart={(event) => event.stopPropagation()}
+            >
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" aria-label={`清单 ${list.name} 操作`}>
+            <DropdownMenuItem onSelect={() => actions.onEdit(list)}>重命名</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => actions.onColor(list)}>更改颜色</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>移动到分组</DropdownMenuLabel>
+            {list.group_id && (
+              <DropdownMenuItem onSelect={() => actions.onMoveToGroup(list, null)}>
+                无分组
               </DropdownMenuItem>
-            ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => actions.onArchive(list)}>归档</DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={() => actions.onDelete(list)}>
-            删除
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            )}
+            {actions.groups
+              .filter((group) => group.id !== list.group_id)
+              .map((group) => (
+                <DropdownMenuItem
+                  key={group.id}
+                  onSelect={() => actions.onMoveToGroup(list, group.id)}
+                >
+                  {group.name}
+                </DropdownMenuItem>
+              ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => actions.onArchive(list)}>归档</DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={() => actions.onDelete(list)}>
+              删除
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       </div>
       {showAfter && <DropLine />}
     </div>
@@ -238,27 +271,30 @@ function GroupHeaderRow({
   dropIndicator: DropIndicator | null;
   setDropIndicator: (indicator: DropIndicator | null) => void;
 }) {
+  const headerRef = useRef<HTMLDivElement>(null);
   const showBefore =
     dropIndicator?.targetId === group.id && dropIndicator.position === "before";
   const showAfter =
     dropIndicator?.targetId === group.id && dropIndicator.position === "after";
 
+  const handleDragStart = (event: React.DragEvent) => {
+    onGroupDragStart(group);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", group.id);
+    headerRef.current?.classList.add("is-list-dragging");
+  };
+
+  const handleDragEnd = () => {
+    onDragEnd();
+    headerRef.current?.classList.remove("is-list-dragging");
+  };
+
   return (
     <div className="sidebar-sort-slot">
       {showBefore && <DropLine />}
       <div
+        ref={headerRef}
         className="list-group-header"
-        draggable
-        onDragStart={(event) => {
-          onGroupDragStart(group);
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("text/plain", group.id);
-          event.currentTarget.classList.add("is-list-dragging");
-        }}
-        onDragEnd={(event) => {
-          onDragEnd();
-          event.currentTarget.classList.remove("is-list-dragging");
-        }}
         onDragOver={(event) => {
           if (!canDropOnHeader(group.id)) {
             setDropIndicator(null);
@@ -287,11 +323,12 @@ function GroupHeaderRow({
       <Button
         variant="ghost"
         className="list-group-toggle !h-[42px] !min-h-[42px] !px-[11px] !pr-[46px] gap-[11px]"
+        draggable
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
         onClick={() => onToggleGroupCollapse(group)}
         aria-expanded={!group.is_collapsed}
         aria-label={`${group.is_collapsed ? "展开" : "折叠"}分组 ${group.name}`}
-        draggable={false}
-        onDragStart={(event) => event.stopPropagation()}
       >
         {group.is_collapsed ? <ChevronRight /> : <ChevronDown />}
         <span className="nav-label">{group.name}</span>
@@ -499,32 +536,18 @@ export function DesktopSidebar({
       )}
       <TooltipProvider delayDuration={80} skipDelayDuration={100}>
         {collapsed ? (
-          <div className="sidebar-lists-scroll nav-section custom-lists">
+          <div
+            className="sidebar-lists-scroll nav-section custom-lists"
+            onDragLeave={() => setDropIndicator(null)}
+          >
             {sortListsByOrder(customLists).map((list) => (
-              <div className="custom-list-wrap" key={list.id}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className={`nav-item ${scope.listId === list.id ? "active" : ""}`}
-                      onClick={() => void onNavigate(`/list/${list.id}`)}
-                      aria-label={`${list.name}，${list.task_count} 个任务`}
-                    >
-                      <span
-                        className="collapsed-list-mark"
-                        style={{ "--list-color": list.color } as React.CSSProperties}
-                        aria-hidden="true"
-                      >
-                        {Array.from(list.name.trim())[0]?.toUpperCase() || "·"}
-                      </span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" align="center" className="list-tooltip">
-                    <strong>{list.name}</strong>
-                    <span>{list.task_count} 个任务</span>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
+              <ListRow
+                key={list.id}
+                list={list}
+                actions={actions}
+                groupId={list.group_id}
+                collapsed
+              />
             ))}
           </div>
         ) : (
