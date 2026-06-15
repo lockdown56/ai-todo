@@ -154,8 +154,15 @@ export const api = {
     return request<TaskPage>(`/api/v1/tasks?${search}`);
   },
   task: (id: string) => request<Task>(`/api/v1/tasks/${id}`),
-  createTask: (body: { title: string; list_id?: string; sort_order?: number }) =>
-    request<Task>("/api/v1/tasks", json("POST", body)),
+  createTask: (body: {
+    title: string;
+    list_id?: string;
+    sort_order?: number;
+    priority?: 0 | 1 | 3 | 5;
+    due_at?: string | null;
+    is_all_day?: boolean;
+    reminder_at?: string | null;
+  }) => request<Task>("/api/v1/tasks", json("POST", body)),
   updateTask: (id: string, body: TaskPatch) => request<Task>(`/api/v1/tasks/${id}`, json("PATCH", body)),
   deleteTask: (id: string) => request<void>(`/api/v1/tasks/${id}`, json("DELETE")),
   completeTask: (id: string) => request<Task>(`/api/v1/tasks/${id}/complete`, json("POST")),

@@ -135,9 +135,14 @@ export function useTaskWorkspace() {
   }, [location.pathname, navigate]);
 
   const createTask = useMutation({
-    mutationFn: (title: string) =>
+    mutationFn: (input: {
+      title: string;
+      priority?: 0 | 1 | 3 | 5;
+      due_at?: string;
+      is_all_day?: boolean;
+    }) =>
       api.createTask({
-        title,
+        ...input,
         ...(scope.listId
           ? { list_id: scope.listId }
           : scope.view === "inbox"

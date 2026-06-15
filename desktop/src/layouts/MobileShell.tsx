@@ -144,7 +144,7 @@ export function MobileShell() {
             }
             onSearch={setSearch}
             onSort={setSort}
-            onCreate={(title) => createTask.mutate(title)}
+            onCreate={(payload) => createTask.mutate(payload)}
           />
           <TaskListPanel
             tasks={taskItems}

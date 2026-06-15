@@ -540,6 +540,47 @@
   color: var(--primary);
 }
 
+.quick-add-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease-out, border-color 140ms ease-out;
+}
+
+.quick-add-chip:hover {
+  background: #eef1f4;
+}
+
+.quick-add-chip > svg {
+  width: 13px;
+  height: 13px;
+}
+
+.quick-add-chip.priority-1 {
+  color: #5f7fb6;
+  border-color: #5f7fb6;
+}
+
+.quick-add-chip.priority-3 {
+  color: #c08a32;
+  border-color: #c08a32;
+}
+
+.quick-add-chip.priority-5 {
+  color: #c96f43;
+  border-color: #c96f43;
+}
+
 .search-field {
   height: 42px;
   margin-top: 12px;

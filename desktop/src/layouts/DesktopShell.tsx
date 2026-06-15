@@ -246,7 +246,7 @@ export function DesktopShell() {
                 createError={createTask.error ? errorMessage(createTask.error) : null}
                 onSearch={setSearch}
                 onSort={setSort}
-                onCreate={(title) => createTask.mutate(title)}
+                onCreate={(payload) => createTask.mutate(payload)}
               />
               {scope.view === "trash" && (trashLists.data?.length || 0) > 0 && (
                 <DeletedLists
