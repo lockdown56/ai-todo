@@ -9,6 +9,8 @@ export const viewNames: Record<TaskView, string> = {
   trash: "回收站",
 };
 
+export const sidebarViewOrder: TaskView[] = ["all", "inbox", "today", "completed", "trash"];
+
 export const viewIcons = {
   inbox: Inbox,
   today: Star,

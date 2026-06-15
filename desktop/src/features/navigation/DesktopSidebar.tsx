@@ -27,7 +27,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { viewNames, viewIcons } from "@/lib/constants";
+import { viewNames, viewIcons, sidebarViewOrder } from "@/lib/constants";
 import { getTopLevelEntries, sortListsByOrder, type DropPosition } from "@/lib/list-reorder";
 import {
   usePointerListSort,
@@ -371,7 +371,7 @@ export function DesktopSidebar({
         </Button>
       </div>
       <div className="nav-section">
-        {(Object.keys(viewNames) as TaskView[]).map((view) => {
+        {sidebarViewOrder.map((view) => {
           const Icon = viewIcons[view];
           return (
             <Button
