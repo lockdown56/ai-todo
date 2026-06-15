@@ -188,12 +188,18 @@ export const handlers = [
       title: string;
       list_id?: string;
       sort_order?: number;
+      priority?: 0 | 1 | 3 | 5;
+      due_at?: string | null;
+      is_all_day?: boolean;
     };
     const task = makeTask({
       id: `00000000-0000-4000-8000-${String(nextTaskNumber++).padStart(12, "0")}`,
       title: body.title,
       list_id: body.list_id || inbox.id,
       sort_order: body.sort_order ?? 2048,
+      priority: body.priority ?? 0,
+      due_at: body.due_at ?? null,
+      is_all_day: body.is_all_day ?? false,
       tags: [],
     });
     tasks.push(task);

@@ -167,7 +167,7 @@ export function TaskListPanel({
     const messages: Record<TaskView | "list", [string, string]> = {
       inbox: ["收集箱为空", "快速添加一个任务开始吧"],
       today: ["今天没有任务", "享受轻松的一天"],
-      all: ["还没有任务", "点击上方快速添加"],
+      all: ["还没有任务", "添加一个任务开始吧"],
       completed: ["还没有已完成的任务", "完成一个任务试试"],
       trash: ["回收站为空", "删除的任务会出现在这里"],
       list: ["清单为空", "快速添加一个任务开始吧"],

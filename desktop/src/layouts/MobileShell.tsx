@@ -3,11 +3,12 @@ import type { RefObject, TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Inbox, Star, ListChecks, Menu, X, ArrowLeft, CheckCircle2, Trash2, UserRound, SlidersHorizontal } from "lucide-react";
+import { Inbox, Star, ListChecks, Menu, Plus, X, ArrowLeft, CheckCircle2, Trash2, UserRound, SlidersHorizontal } from "lucide-react";
 import { useTaskWorkspace } from "@/features/tasks/useTaskWorkspace";
 import { TaskHeader } from "@/features/tasks/TaskHeader";
 import { TaskListPanel } from "@/features/tasks/TaskListPanel";
 import { TaskDetail } from "@/features/tasks/TaskDetail";
+import { MobileTaskComposer } from "@/features/tasks/MobileTaskComposer";
 import { ProfilePage } from "@/features/account/ProfilePage";
 import { SettingsPage } from "@/features/account/SettingsPage";
 import { LoadingScreen } from "@/components/LoadingScreen";
@@ -80,6 +81,7 @@ export function MobileShell() {
 
   // 左上角「更多」抽屉的开关状态
   const [moreOpen, setMoreOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const currentTitle = scope.listId
     ? currentList?.name || "清单"
@@ -88,6 +90,11 @@ export function MobileShell() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (composerOpen) {
+          event.preventDefault();
+          setComposerOpen(false);
+          return;
+        }
         if (moreOpen) {
           event.preventDefault();
           setMoreOpen(false);
@@ -99,7 +106,7 @@ export function MobileShell() {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [closeDetail, moreOpen]);
+  }, [closeDetail, composerOpen, moreOpen]);
 
   // 抽屉内选择某项后跳转并关闭
   const navigateFromDrawer = (path: string) => {
@@ -140,6 +147,7 @@ export function MobileShell() {
             quickAddRef={quickAddRef}
             createPending={createTask.isPending}
             createError={createTask.error ? errorMessage(createTask.error) : null}
+            showQuickAdd={false}
             leading={
               <Button
                 variant="ghost"
@@ -235,6 +243,37 @@ export function MobileShell() {
           </Button>
         ))}
       </nav>
+
+      {!isProfileRoute && !isSettingsRoute && (
+        <Button
+          type="button"
+          size="icon"
+          className="mobile-add-fab"
+          onClick={() => setComposerOpen(true)}
+          aria-label="新建任务"
+          aria-expanded={composerOpen}
+        >
+          <Plus />
+        </Button>
+      )}
+
+      {composerOpen && (
+        <MobileTaskComposer
+          lists={lists.data || []}
+          defaultListId={
+            scope.listId
+              || lists.data?.find((list) => list.system_type === "inbox")?.id
+          }
+          pending={createTask.isPending}
+          error={createTask.error ? errorMessage(createTask.error) : null}
+          onClose={() => setComposerOpen(false)}
+          onCreate={(payload) =>
+            createTask.mutate(payload, {
+              onSuccess: () => setComposerOpen(false),
+            })
+          }
+        />
+      )}
 
       {moreOpen && (
         <MobileMoreDrawer

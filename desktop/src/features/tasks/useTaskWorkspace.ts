@@ -8,7 +8,14 @@ import {
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "@/api";
 import { queryKeys } from "@/query";
-import type { ListGroup, Task, TaskList, TaskSort, TaskView } from "@/types";
+import type {
+  CreateTaskInput,
+  ListGroup,
+  Task,
+  TaskList,
+  TaskSort,
+  TaskView,
+} from "@/types";
 import { useDebouncedValue, useWindowWidth } from "@/lib/hooks";
 import {
   invalidateTaskData,
@@ -209,20 +216,14 @@ export function useTaskWorkspace() {
   }, [location.pathname, navigate, scopeKey]);
 
   const createTask = useMutation({
-    mutationFn: (input: {
-      title: string;
-      priority?: 0 | 1 | 3 | 5;
-      due_at?: string;
-      is_all_day?: boolean;
-    }) =>
-      api.createTask({
+    mutationFn: (input: CreateTaskInput) => {
+      const defaultListId = scope.listId
+        || lists.data?.find((item) => item.system_type === "inbox")?.id;
+      return api.createTask({
         ...input,
-        ...(scope.listId
-          ? { list_id: scope.listId }
-          : scope.view === "inbox"
-            ? { list_id: lists.data?.find((item) => item.system_type === "inbox")?.id }
-            : {}),
-      }),
+        ...(!input.list_id && defaultListId ? { list_id: defaultListId } : {}),
+      });
+    },
     onSuccess: (task) => {
       invalidateTaskData(queryClient, task.id);
       void openTask(task.id);

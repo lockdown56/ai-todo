@@ -747,6 +747,69 @@ describe("AI 清单 app", () => {
     expect(items[0]).toHaveTextContent("收集箱");
     expect(items[1]).toHaveTextContent("今天");
     expect(items[2]).toHaveTextContent("全部");
+    expect(screen.queryByRole("textbox", { name: "快速添加任务" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建任务" })).toBeInTheDocument();
+  });
+
+  it("creates a mobile task from the bottom composer with task properties", async () => {
+    setWindowWidth(390);
+    const createdBodies: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(
+        "http://127.0.0.1:8000/api/v1/tasks",
+        async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>;
+          createdBodies.push(body);
+          return HttpResponse.json(
+            makeTask({
+              id: "00000000-0000-4000-8000-000000000999",
+              ...body,
+              tags: [],
+            }),
+            { status: 201 },
+          );
+        },
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp();
+
+    await screen.findByText("编写测试");
+    await user.click(screen.getByRole("button", { name: "新建任务" }));
+
+    expect(screen.getByRole("dialog", { name: "新建任务" })).toBeInTheDocument();
+    const title = screen.getByRole("textbox", { name: "新任务标题" });
+    await waitFor(() => expect(title).toHaveFocus());
+    await user.type(title, "移动端新增任务");
+
+    const today = new Date();
+    const dueAt = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    ).toISOString();
+    await user.click(screen.getByRole("button", { name: "日期" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`,
+      }),
+    );
+    await user.click(screen.getByRole("combobox", { name: "优先级" }));
+    await user.click(screen.getByRole("option", { name: "高" }));
+    await user.click(screen.getByRole("combobox", { name: "清单" }));
+    await user.click(screen.getByRole("option", { name: "工作" }));
+    await user.click(screen.getByRole("button", { name: "创建任务" }));
+
+    await waitFor(() =>
+      expect(createdBodies).toContainEqual({
+        title: "移动端新增任务",
+        priority: 5,
+        list_id: "00000000-0000-4000-8000-000000000011",
+        due_at: dueAt,
+        is_all_day: true,
+      }),
+    );
+    expect(screen.queryByRole("dialog", { name: "新建任务" })).not.toBeInTheDocument();
   });
 
   it("opens the more drawer from the top-left trigger on mobile", async () => {

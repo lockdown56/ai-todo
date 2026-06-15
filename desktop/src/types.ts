@@ -92,6 +92,15 @@ export interface TaskPage {
   next_cursor: string | null;
 }
 
+export interface CreateTaskInput {
+  title: string;
+  list_id?: string;
+  priority?: 0 | 1 | 3 | 5;
+  due_at?: string | null;
+  is_all_day?: boolean;
+  reminder_at?: string | null;
+}
+
 export interface ApiErrorPayload {
   error: {
     code: string;
