@@ -1,18 +1,89 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode, RefObject } from "react";
 import { ArrowUp, CalendarDays, Flag, List, LoaderCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { priorityLabels } from "@/lib/constants";
 import { isImeComposing } from "@/lib/keyboard-utils";
 import type { CreateTaskInput, TaskList } from "@/types";
 import { DateTimePicker } from "./DateTimePicker";
+
+function MobileComposerSelect({
+  label,
+  value,
+  valueLabel,
+  options,
+  preserveFocusRef,
+  onValueChange,
+}: {
+  label: string;
+  value: string;
+  valueLabel: ReactNode;
+  options: Array<{ value: string; label: ReactNode }>;
+  preserveFocusRef: RefObject<HTMLElement | null>;
+  onValueChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const preservingFocus = useRef(false);
+
+  const keepTitleFocused = (event: React.PointerEvent) => {
+    const input = preserveFocusRef.current;
+    if (!input || document.activeElement !== input) return;
+    preservingFocus.current = true;
+    event.preventDefault();
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          className="mobile-composer-select-trigger"
+          role="combobox"
+          aria-label={label}
+          aria-expanded={open}
+          onPointerDown={keepTitleFocused}
+        >
+          <span>{valueLabel}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="mobile-composer-select-popover"
+        align="start"
+        role="listbox"
+        aria-label={label}
+        onPointerDown={keepTitleFocused}
+        onOpenAutoFocus={(event) => {
+          if (preservingFocus.current) event.preventDefault();
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!preservingFocus.current) return;
+          event.preventDefault();
+          preservingFocus.current = false;
+        }}
+      >
+        {options.map((option) => (
+          <Button
+            key={option.value}
+            type="button"
+            variant="ghost"
+            className="mobile-composer-select-option"
+            role="option"
+            aria-selected={option.value === value}
+            onClick={() => {
+              onValueChange(option.value);
+              setOpen(false);
+            }}
+          >
+            {option.label}
+          </Button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function MobileTaskComposer({
   lists,
@@ -108,7 +179,13 @@ export function MobileTaskComposer({
           <div className="mobile-composer-options">
             <div className="mobile-composer-option">
               <CalendarDays />
-              <DateTimePicker label="日期" value={dueAt} allDay onChange={setDueAt} />
+              <DateTimePicker
+                label="日期"
+                value={dueAt}
+                allDay
+                preserveFocusRef={titleRef}
+                onChange={setDueAt}
+              />
               {dueAt && (
                 <Button
                   type="button"
@@ -124,39 +201,29 @@ export function MobileTaskComposer({
 
             <div className="mobile-composer-option">
               <Flag />
-              <Select
+              <MobileComposerSelect
+                label="优先级"
                 value={String(priority)}
+                valueLabel={priority === 0 ? "优先级" : priorityLabels[priority]}
+                options={[0, 1, 3, 5].map((value) => ({
+                  value: String(value),
+                  label: priorityLabels[value as 0 | 1 | 3 | 5],
+                }))}
+                preserveFocusRef={titleRef}
                 onValueChange={(value) => setPriority(Number(value) as 0 | 1 | 3 | 5)}
-              >
-                <SelectTrigger aria-label="优先级">
-                  <SelectValue>
-                    {priority === 0 ? "优先级" : priorityLabels[priority]}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {[0, 1, 3, 5].map((value) => (
-                    <SelectItem key={value} value={String(value)}>
-                      {priorityLabels[value as 0 | 1 | 3 | 5]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
 
             <div className="mobile-composer-option mobile-composer-list-option">
               <List />
-              <Select value={listId} onValueChange={setListId}>
-                <SelectTrigger aria-label="清单">
-                  <SelectValue placeholder="选择清单" />
-                </SelectTrigger>
-                <SelectContent>
-                  {lists.map((list) => (
-                    <SelectItem key={list.id} value={list.id}>
-                      {list.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MobileComposerSelect
+                label="清单"
+                value={listId}
+                valueLabel={lists.find((list) => list.id === listId)?.name || "选择清单"}
+                options={lists.map((list) => ({ value: list.id, label: list.name }))}
+                preserveFocusRef={titleRef}
+                onValueChange={setListId}
+              />
             </div>
 
             <Button

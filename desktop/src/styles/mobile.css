@@ -145,7 +145,7 @@
     display: none;
   }
 
-  .mobile-composer-option [data-slot="select-trigger"],
+  .mobile-composer-option .mobile-composer-select-trigger,
   .mobile-composer-option .date-trigger {
     width: auto;
     min-width: 44px;
@@ -154,10 +154,6 @@
     border: 0;
     box-shadow: none;
     color: var(--muted-foreground);
-  }
-
-  .mobile-composer-option [data-slot="select-trigger"] svg {
-    display: none;
   }
 
   .mobile-composer-option .date-trigger.placeholder {
@@ -173,14 +169,24 @@
     flex: 1;
   }
 
-  .mobile-composer-list-option [data-slot="select-trigger"] {
+  .mobile-composer-list-option .mobile-composer-select-trigger {
     max-width: 120px;
   }
 
-  .mobile-composer-list-option [data-slot="select-trigger"] > span {
+  .mobile-composer-list-option .mobile-composer-select-trigger > span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .mobile-composer-select-popover {
+    width: min(240px, calc(100vw - 32px));
+    padding: 4px;
+  }
+
+  .mobile-composer-select-option {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .mobile-composer-submit {

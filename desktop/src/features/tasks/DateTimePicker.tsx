@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type { PointerEvent, RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,7 @@ export function DateTimePicker({
   allDay = false,
   disabled = false,
   max = null,
+  preserveFocusRef,
   onChange,
 }: {
   label: string;
@@ -32,11 +34,20 @@ export function DateTimePicker({
   allDay?: boolean;
   disabled?: boolean;
   max?: string | null;
+  preserveFocusRef?: RefObject<HTMLElement | null>;
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() => monthStart(pickerBaseDate(value, max)));
   const [time, setTime] = useState(() => formatTimeInput(pickerBaseDate(value, max)));
+  const preservingFocus = useRef(false);
+
+  const keepCurrentInputFocused = (event: PointerEvent) => {
+    const input = preserveFocusRef?.current;
+    if (!input || document.activeElement !== input) return;
+    preservingFocus.current = true;
+    event.preventDefault();
+  };
 
   const setPickerOpen = (nextOpen: boolean) => {
     if (nextOpen) {
@@ -75,6 +86,7 @@ export function DateTimePicker({
             className={cn("date-trigger", !value && "placeholder")}
             disabled={disabled}
             aria-label={label}
+            onPointerDown={keepCurrentInputFocused}
           >
             {formatPickerValue(value, allDay)}
           </Button>
@@ -84,6 +96,15 @@ export function DateTimePicker({
           align="start"
           role="dialog"
           aria-label={`${label}选择器`}
+          onPointerDown={keepCurrentInputFocused}
+          onOpenAutoFocus={(event) => {
+            if (preservingFocus.current) event.preventDefault();
+          }}
+          onCloseAutoFocus={(event) => {
+            if (!preservingFocus.current) return;
+            event.preventDefault();
+            preservingFocus.current = false;
+          }}
           onEscapeKeyDown={(event) => event.stopPropagation()}
         >
           <div className="date-picker-header">

@@ -789,15 +789,21 @@ describe("AI 清单 app", () => {
       today.getDate(),
     ).toISOString();
     await user.click(screen.getByRole("button", { name: "日期" }));
+    expect(title).toHaveFocus();
     await user.click(
       screen.getByRole("button", {
         name: `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`,
       }),
     );
+    expect(title).toHaveFocus();
     await user.click(screen.getByRole("combobox", { name: "优先级" }));
+    expect(title).toHaveFocus();
     await user.click(screen.getByRole("option", { name: "高" }));
+    expect(title).toHaveFocus();
     await user.click(screen.getByRole("combobox", { name: "清单" }));
+    expect(title).toHaveFocus();
     await user.click(screen.getByRole("option", { name: "工作" }));
+    expect(title).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "创建任务" }));
 
     await waitFor(() =>
