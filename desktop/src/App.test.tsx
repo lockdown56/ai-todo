@@ -666,26 +666,25 @@ describe("AI 清单 app", () => {
     expect(localStorage.getItem("todolist-access-token")).toBeNull();
   });
 
-  it("renders mobile bottom nav with four items at narrow width", async () => {
+  it("renders mobile bottom nav with three items at narrow width", async () => {
     setWindowWidth(390);
     renderApp();
 
     const nav = await screen.findByRole("navigation");
     const items = nav.querySelectorAll(".mobile-nav-item");
-    expect(items).toHaveLength(4);
+    expect(items).toHaveLength(3);
     expect(items[0]).toHaveTextContent("收集箱");
     expect(items[1]).toHaveTextContent("今天");
     expect(items[2]).toHaveTextContent("全部");
-    expect(items[3]).toHaveTextContent("更多");
   });
 
-  it("navigates to more page from mobile bottom nav", async () => {
+  it("opens the more drawer from the top-left trigger on mobile", async () => {
     setWindowWidth(390);
     const user = userEvent.setup();
     renderApp();
 
     await screen.findByText("编写测试");
-    await user.click(screen.getByRole("button", { name: "更多" }));
+    await user.click(screen.getByRole("button", { name: "打开更多" }));
 
     expect(await screen.findByText("已完成")).toBeInTheDocument();
     expect(screen.getByText("回收站")).toBeInTheDocument();

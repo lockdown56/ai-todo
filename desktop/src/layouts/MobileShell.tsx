@@ -1,13 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RefObject, TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Inbox, Star, ListChecks, MoreHorizontal, ArrowLeft } from "lucide-react";
+import { Inbox, Star, ListChecks, Menu, X, ArrowLeft, CheckCircle2, Trash2, UserRound, SlidersHorizontal } from "lucide-react";
 import { useTaskWorkspace } from "@/features/tasks/useTaskWorkspace";
 import { TaskHeader } from "@/features/tasks/TaskHeader";
 import { TaskListPanel } from "@/features/tasks/TaskListPanel";
 import { TaskDetail } from "@/features/tasks/TaskDetail";
+import { ProfilePage } from "@/features/account/ProfilePage";
+import { SettingsPage } from "@/features/account/SettingsPage";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ConnectionError } from "@/components/ConnectionError";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -23,6 +25,12 @@ const mobileNavItems = [
   { view: "all" as TaskView, icon: ListChecks, label: "全部" },
 ];
 
+// 抽屉中展示的「更多」视图（不含底部导航已收录的 inbox/today/all）
+const moreViews: { view: TaskView; icon: typeof CheckCircle2; label: string }[] = [
+  { view: "completed", icon: CheckCircle2, label: viewNames.completed },
+  { view: "trash", icon: Trash2, label: viewNames.trash },
+];
+
 export function MobileShell() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,16 +44,18 @@ export function MobileShell() {
     setSort,
     confirm,
     setConfirm,
-    
+    isProfileRoute,
+    isSettingsRoute,
+
     health,
     lists,
     tasks,
     taskItems,
     currentList,
-    
+
     editorRef,
     quickAddRef,
-    
+
     openTask,
     closeDetail,
     createTask,
@@ -58,6 +68,9 @@ export function MobileShell() {
     permanentTaskMutation,
   } = useTaskWorkspace();
 
+  // 左上角「更多」抽屉的开关状态
+  const [moreOpen, setMoreOpen] = useState(false);
+
   const currentTitle = scope.listId
     ? currentList?.name || "清单"
     : viewNames[scope.view || "inbox"];
@@ -65,13 +78,24 @@ export function MobileShell() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (moreOpen) {
+          event.preventDefault();
+          setMoreOpen(false);
+          return;
+        }
         event.preventDefault();
         void closeDetail();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [closeDetail]);
+  }, [closeDetail, moreOpen]);
+
+  // 抽屉内选择某项后跳转并关闭
+  const navigateFromDrawer = (path: string) => {
+    setMoreOpen(false);
+    navigate(path);
+  };
 
   if (health.isPending) {
     return <LoadingScreen />;
@@ -87,64 +111,15 @@ export function MobileShell() {
     );
   }
 
-  const isMorePage = location.pathname === "/more";
-
   return (
     <div className="mobile-shell">
-      {isMorePage ? (
-        <div className="mobile-more-page">
-          <header className="mobile-more-header">
-            <h1>更多</h1>
-          </header>
-          <div className="mobile-more-content">
-            <Button
-              variant="ghost"
-              className="mobile-more-item"
-              onClick={() => navigate("/view/completed")}
-            >
-              已完成
-            </Button>
-            <Button
-              variant="ghost"
-              className="mobile-more-item"
-              onClick={() => navigate("/view/trash")}
-            >
-              回收站
-            </Button>
-            <div className="mobile-more-divider" />
-            <div className="mobile-more-section">
-              <span className="mobile-more-section-title">清单</span>
-              {lists.data
-                ?.filter((list) => !list.system_type)
-                .map((list) => (
-                  <Button
-                    key={list.id}
-                    variant="ghost"
-                    className="mobile-more-item"
-                    onClick={() => navigate(`/list/${list.id}`)}
-                  >
-                    <span className="list-dot" style={{ backgroundColor: list.color }} />
-                    {list.name}
-                  </Button>
-                ))}
-            </div>
-            <div className="mobile-more-divider" />
-            <Button
-              variant="ghost"
-              className="mobile-more-item"
-              onClick={() => navigate("/profile")}
-            >
-              个人中心
-            </Button>
-            <Button
-              variant="ghost"
-              className="mobile-more-item"
-              onClick={() => navigate("/settings")}
-            >
-              设置
-            </Button>
-          </div>
-        </div>
+      {isProfileRoute || isSettingsRoute ? (
+        <MobileSubPage
+          title={isProfileRoute ? "个人中心" : "设置"}
+          onBack={() => navigate("/view/inbox")}
+        >
+          {isProfileRoute ? <ProfilePage /> : <SettingsPage />}
+        </MobileSubPage>
       ) : (
         <>
           <TaskHeader
@@ -155,6 +130,18 @@ export function MobileShell() {
             quickAddRef={quickAddRef}
             createPending={createTask.isPending}
             createError={createTask.error ? errorMessage(createTask.error) : null}
+            leading={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="mobile-more-trigger"
+                onClick={() => setMoreOpen(true)}
+                aria-label="打开更多"
+                aria-expanded={moreOpen}
+              >
+                <Menu />
+              </Button>
+            }
             onSearch={setSearch}
             onSort={setSort}
             onCreate={(title) => createTask.mutate(title)}
@@ -228,15 +215,16 @@ export function MobileShell() {
             <span>{label}</span>
           </Button>
         ))}
-        <Button
-          variant="ghost"
-          className={`mobile-nav-item ${isMorePage ? "active" : ""}`}
-          onClick={() => navigate("/more")}
-        >
-          <MoreHorizontal />
-          <span>更多</span>
-        </Button>
       </nav>
+
+      {moreOpen && (
+        <MobileMoreDrawer
+          lists={lists.data || []}
+          currentPath={location.pathname}
+          onNavigate={navigateFromDrawer}
+          onClose={() => setMoreOpen(false)}
+        />
+      )}
 
       {confirm && (
         <ConfirmDialog
@@ -251,6 +239,113 @@ export function MobileShell() {
 }
 
 type EditorHandle = { flush: () => Promise<boolean> };
+
+function MobileSubPage({
+  title,
+  onBack,
+  children,
+}: {
+  title: string;
+  onBack: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mobile-more-page">
+      <header className="mobile-more-header mobile-subpage-header">
+        <Button variant="ghost" size="icon-sm" onClick={onBack} aria-label="返回">
+          <ArrowLeft />
+        </Button>
+        <h1>{title}</h1>
+      </header>
+      <div className="mobile-more-content mobile-subpage-content">{children}</div>
+    </div>
+  );
+}
+
+function MobileMoreDrawer({
+  lists,
+  currentPath,
+  onNavigate,
+  onClose,
+}: {
+  lists: TaskList[];
+  currentPath: string;
+  onNavigate: (path: string) => void;
+  onClose: () => void;
+}) {
+  const customLists = lists.filter((list) => !list.system_type);
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="关闭更多"
+        className="mobile-more-backdrop"
+        onClick={onClose}
+      />
+      <aside className="mobile-more-drawer" aria-label="更多">
+        <header className="mobile-more-drawer-header">
+          <span>更多</span>
+          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="关闭">
+            <X />
+          </Button>
+        </header>
+        <div className="mobile-more-drawer-body">
+          <nav className="mobile-more-section" aria-label="视图">
+            {moreViews.map(({ view, icon: Icon, label }) => (
+              <Button
+                key={view}
+                variant="ghost"
+                className="mobile-more-item"
+                onClick={() => onNavigate(`/view/${view}`)}
+              >
+                <Icon />
+                <span>{label}</span>
+              </Button>
+            ))}
+          </nav>
+          {customLists.length > 0 && (
+            <>
+              <div className="mobile-more-divider" />
+              <div className="mobile-more-section">
+                <span className="mobile-more-section-title">清单</span>
+                {customLists.map((list) => (
+                  <Button
+                    key={list.id}
+                    variant="ghost"
+                    className={`mobile-more-item ${currentPath === `/list/${list.id}` ? "active" : ""}`}
+                    onClick={() => onNavigate(`/list/${list.id}`)}
+                  >
+                    <span className="list-dot" style={{ backgroundColor: list.color }} />
+                    <span>{list.name}</span>
+                  </Button>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="mobile-more-divider" />
+          <div className="mobile-more-section">
+            <Button
+              variant="ghost"
+              className={`mobile-more-item ${currentPath === "/profile" ? "active" : ""}`}
+              onClick={() => onNavigate("/profile")}
+            >
+              <UserRound />
+              <span>个人中心</span>
+            </Button>
+            <Button
+              variant="ghost"
+              className={`mobile-more-item ${currentPath === "/settings" ? "active" : ""}`}
+              onClick={() => onNavigate("/settings")}
+            >
+              <SlidersHorizontal />
+              <span>设置</span>
+            </Button>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
 
 function MobileDetailSheet({
   taskId,

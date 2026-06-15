@@ -11,7 +11,9 @@
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
     "android:apk": "tauri android build --apk",
-    "android:aab": "tauri android build --aab"
+    "android:aab": "tauri android build --aab",
+    "android:sign": "node scripts/sign-android-apk.mjs",
+    "android:release": "npm run android:apk && npm run android:sign"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",

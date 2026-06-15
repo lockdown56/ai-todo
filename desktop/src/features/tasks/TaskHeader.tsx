@@ -21,6 +21,7 @@ export function TaskHeader({
   quickAddRef,
   createPending,
   createError,
+  leading,
   onSearch,
   onSort,
   onCreate,
@@ -32,6 +33,8 @@ export function TaskHeader({
   quickAddRef: React.RefObject<HTMLInputElement | null>;
   createPending: boolean;
   createError: string | null;
+  /** 渲染在标题左侧的可选内容（移动端用于放置打开抽屉的按钮） */
+  leading?: React.ReactNode;
   onSearch: (value: string) => void;
   onSort: (sort: TaskSort) => void;
   onCreate: (title: string) => void;
@@ -76,6 +79,7 @@ export function TaskHeader({
     <header className="middle-header">
       <div className="title-row">
         <div>
+          {leading}
           <h1>{title}</h1>
           <span>{count} 个任务</span>
         </div>

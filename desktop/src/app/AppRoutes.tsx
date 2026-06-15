@@ -63,7 +63,6 @@ export function AppRoutes() {
       <Route path="/list/:listId" element={<ProtectedShell />} />
       <Route path="/profile" element={<ProtectedShell />} />
       <Route path="/settings" element={<SettingsRoute />} />
-      <Route path="/more" element={<ProtectedShell />} />
       <Route path="*" element={<Navigate to="/view/inbox" replace />} />
     </Routes>
   );
