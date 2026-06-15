@@ -1,4 +1,7 @@
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -20,16 +23,28 @@ fn default_true() -> bool {
     true
 }
 
-pub struct TrayState(pub Mutex<TraySettings>);
+pub struct TrayState {
+    settings: Mutex<TraySettings>,
+    exiting: AtomicBool,
+}
+
+impl TrayState {
+    pub fn new() -> Self {
+        Self {
+            settings: Mutex::new(TraySettings::default()),
+            exiting: AtomicBool::new(false),
+        }
+    }
+}
 
 #[tauri::command]
 pub fn get_tray_settings(state: State<TrayState>) -> TraySettings {
-    state.0.lock().unwrap().clone()
+    state.settings.lock().unwrap().clone()
 }
 
 #[tauri::command]
 pub fn set_tray_settings(state: State<TrayState>, settings: TraySettings) {
-    *state.0.lock().unwrap() = settings;
+    *state.settings.lock().unwrap() = settings;
 }
 
 fn show_main_window(app: &AppHandle) {
@@ -56,7 +71,12 @@ pub fn setup_tray(app: &mut App) -> tauri::Result<()> {
         .tooltip("AI 清单")
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main_window(app),
-            "quit" => app.exit(0),
+            "quit" => {
+                app.state::<TrayState>()
+                    .exiting
+                    .store(true, Ordering::SeqCst);
+                app.exit(0);
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -75,7 +95,7 @@ pub fn setup_tray(app: &mut App) -> tauri::Result<()> {
 }
 
 pub fn handle_window_event(window: &Window, event: &WindowEvent) {
-    let settings = window.state::<TrayState>().0.lock().unwrap().clone();
+    let settings = window.state::<TrayState>().settings.lock().unwrap().clone();
 
     match event {
         WindowEvent::CloseRequested { api, .. } => {
@@ -95,13 +115,10 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
 
 pub fn handle_run_event(app: &AppHandle, event: &tauri::RunEvent) {
     if let tauri::RunEvent::ExitRequested { api, .. } = event {
-        let close_to_tray = app
-            .state::<TrayState>()
-            .0
-            .lock()
-            .unwrap()
-            .close_to_tray;
-        if close_to_tray {
+        let tray_state = app.state::<TrayState>();
+        let close_to_tray = tray_state.settings.lock().unwrap().close_to_tray;
+        let exiting = tray_state.exiting.load(Ordering::SeqCst);
+        if close_to_tray && !exiting {
             api.prevent_exit();
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();

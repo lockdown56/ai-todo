@@ -58,7 +58,7 @@ interface DropIndicator {
   position: DropPosition;
 }
 
-function dropPositionFromEvent(event: React.DragEvent, element: HTMLElement): DropPosition {
+function dropPositionFromEvent(event: React.DragEvent, element: Element): DropPosition {
   const rect = element.getBoundingClientRect();
   return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
 }

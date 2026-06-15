@@ -1,5 +1,3 @@
-use std::sync::Mutex;
-
 #[cfg(desktop)]
 mod tray;
 
@@ -48,10 +46,10 @@ pub fn run() {
 
     #[cfg(desktop)]
     {
-        use tray::{TraySettings, TrayState, get_tray_settings, set_tray_settings};
+        use tray::{TrayState, get_tray_settings, set_tray_settings};
 
         builder = builder
-            .manage(TrayState(Mutex::new(TraySettings::default())))
+            .manage(TrayState::new())
             .invoke_handler(tauri::generate_handler![get_tray_settings, set_tray_settings])
             .setup(|app| {
                 tray::setup_tray(app)?;

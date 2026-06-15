@@ -389,8 +389,43 @@ function MobileDetailSheet({
   onDataChanged: () => void;
 }) {
   const sheetRef = useRef<HTMLDivElement>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   // 下拉手势起始 Y 坐标，null 表示未在拖拽中
   const dragStartY = useRef<number | null>(null);
+
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+
+    const isEditable = (element: Element | null): element is HTMLElement =>
+      element instanceof HTMLElement &&
+      element.matches("input, textarea, [contenteditable='true']");
+
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (!isEditable(target)) return;
+      setKeyboardOpen(true);
+      window.requestAnimationFrame(() => {
+        target.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    };
+
+    const onFocusOut = () => {
+      window.requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (!sheet.contains(active) || !isEditable(active)) {
+          setKeyboardOpen(false);
+        }
+      });
+    };
+
+    sheet.addEventListener("focusin", onFocusIn);
+    sheet.addEventListener("focusout", onFocusOut);
+    return () => {
+      sheet.removeEventListener("focusin", onFocusIn);
+      sheet.removeEventListener("focusout", onFocusOut);
+    };
+  }, []);
 
   const onDragTouchStart = (event: ReactTouchEvent) => {
     // 只在内容滚动到顶部时才允许下拉关闭，避免与详情内滚动冲突
@@ -433,7 +468,7 @@ function MobileDetailSheet({
       />
       <div
         ref={sheetRef}
-        className="mobile-detail-sheet"
+        className={`mobile-detail-sheet${keyboardOpen ? " keyboard-open" : ""}`}
         onTouchStart={onDragTouchStart}
         onTouchMove={onDragTouchMove}
         onTouchEnd={onDragTouchEnd}
