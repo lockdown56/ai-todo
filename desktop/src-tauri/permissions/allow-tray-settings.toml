@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-tray-settings"
+description = "Allows tray behavior settings commands"
+commands.allow = ["get_tray_settings", "set_tray_settings"]

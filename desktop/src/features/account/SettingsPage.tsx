@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { isTauri } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { LoaderCircle, SlidersHorizontal } from "lucide-react";
 import { testApiBaseUrl } from "@/api";
 import {
@@ -17,6 +19,12 @@ import {
 import { clearAuthSession, notifyAuthChanged } from "@/auth";
 import { queryKeys } from "@/query";
 import { errorMessage } from "@/lib/error-utils";
+import {
+  getTraySettings,
+  setTraySettings,
+  syncTraySettingsToBackend,
+  type TraySettings,
+} from "@/lib/tray-settings";
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -27,6 +35,8 @@ export function SettingsPage() {
     "idle",
   );
   const [message, setMessage] = useState("");
+  const [traySettings, setTraySettingsValue] = useState<TraySettings>(() => getTraySettings());
+  const showTraySettings = isTauri();
 
   useEffect(() => {
     const current = getApiBaseUrl();
@@ -101,6 +111,13 @@ export function SettingsPage() {
     }
   };
 
+  const updateTraySetting = (key: keyof TraySettings, checked: boolean) => {
+    const next = { ...traySettings, [key]: checked };
+    setTraySettingsValue(next);
+    setTraySettings(next);
+    void syncTraySettingsToBackend();
+  };
+
   return (
     <section className="settings-page">
       <div className="settings-header">
@@ -156,6 +173,36 @@ export function SettingsPage() {
           </div>
         )}
       </form>
+      {showTraySettings && (
+        <section className="settings-card tray-settings-card" aria-label="托盘设置">
+          <h2 className="settings-section-title">托盘</h2>
+          <p className="settings-help tray-settings-intro">
+            应用在后台运行时可通过系统托盘图标恢复窗口；托盘菜单中的「退出」才会真正关闭应用。
+          </p>
+          <div className="tray-settings-options">
+            <label className="tray-settings-option">
+              <Checkbox
+                checked={traySettings.closeToTray}
+                onCheckedChange={(checked) => updateTraySetting("closeToTray", checked === true)}
+              />
+              <span>
+                <strong>关闭时隐藏到托盘</strong>
+                <span className="settings-help">点击窗口关闭按钮时隐藏窗口，不退出应用</span>
+              </span>
+            </label>
+            <label className="tray-settings-option">
+              <Checkbox
+                checked={traySettings.minimizeToTray}
+                onCheckedChange={(checked) => updateTraySetting("minimizeToTray", checked === true)}
+              />
+              <span>
+                <strong>最小化到托盘</strong>
+                <span className="settings-help">点击最小化时隐藏窗口，从托盘恢复</span>
+              </span>
+            </label>
+          </div>
+        </section>
+      )}
     </section>
   );
 }

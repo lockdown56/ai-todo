@@ -514,6 +514,46 @@
   color: var(--destructive);
 }
 
+.settings-section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.tray-settings-card {
+  margin-top: 0;
+}
+
+.tray-settings-intro {
+  margin: 0;
+}
+
+.tray-settings-options {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tray-settings-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.tray-settings-option strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--foreground);
+  margin-bottom: 2px;
+}
+
+.tray-settings-option .settings-help {
+  display: block;
+}
+
 .standalone-settings {
   display: flex;
   min-height: 100%;

@@ -1,3 +1,8 @@
+use std::sync::Mutex;
+
+#[cfg(desktop)]
+mod tray;
+
 #[cfg(target_os = "linux")]
 fn configure_wsl_input_method() {
     use std::{
@@ -39,7 +44,27 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     configure_wsl_input_method();
 
-    tauri::Builder::default()
-        .run(tauri::generate_context!())
-        .expect("error while running AI 清单");
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    {
+        use tray::{TraySettings, TrayState, get_tray_settings, set_tray_settings};
+
+        builder = builder
+            .manage(TrayState(Mutex::new(TraySettings::default())))
+            .invoke_handler(tauri::generate_handler![get_tray_settings, set_tray_settings])
+            .setup(|app| {
+                tray::setup_tray(app)?;
+                Ok(())
+            })
+            .on_window_event(|window, event| tray::handle_window_event(window, event));
+    }
+
+    builder
+        .build(tauri::generate_context!())
+        .expect("error while building AI 清单")
+        .run(|app, event| {
+            #[cfg(desktop)]
+            tray::handle_run_event(app, &event);
+        });
 }
