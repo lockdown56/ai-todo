@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { AUTH_CHANGED_EVENT, getAccessToken } from "@/auth";
+import { getDefaultWorkspaceRoute } from "@/lib/workspace-preferences";
 import { SessionGate } from "./SessionGate";
 import { Shell } from "./Shell";
 import { LoginPage } from "@/features/account/LoginPage";
@@ -57,13 +58,13 @@ export function AppRoutes() {
     <Routes>
       <Route
         path="/login"
-        element={getAccessToken() ? <Navigate to="/view/inbox" replace /> : <LoginPage />}
+        element={getAccessToken() ? <Navigate to={getDefaultWorkspaceRoute()} replace /> : <LoginPage />}
       />
       <Route path="/view/:view" element={<ProtectedShell />} />
       <Route path="/list/:listId" element={<ProtectedShell />} />
       <Route path="/profile" element={<ProtectedShell />} />
       <Route path="/settings" element={<SettingsRoute />} />
-      <Route path="*" element={<Navigate to="/view/inbox" replace />} />
+      <Route path="*" element={<Navigate to={getDefaultWorkspaceRoute()} replace />} />
     </Routes>
   );
 }

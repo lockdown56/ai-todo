@@ -8,6 +8,7 @@ import { KeyRound, LoaderCircle } from "lucide-react";
 import { api } from "@/api";
 import { setAuthSession } from "@/auth";
 import { errorMessage } from "@/lib/error-utils";
+import { getDefaultWorkspaceRoute } from "@/lib/workspace-preferences";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ export function LoginPage() {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const from =
-    (location.state as { from?: string } | null)?.from || "/view/inbox";
+    (location.state as { from?: string } | null)?.from || getDefaultWorkspaceRoute();
 
   const submit = async () => {
     setPending(true);
@@ -27,7 +28,7 @@ export function LoginPage() {
       const response = await api.login(username.trim(), password);
       setAuthSession(response.access_token, response.user);
       queryClient.clear();
-      navigate(from === "/login" ? "/view/inbox" : from, { replace: true });
+      navigate(from === "/login" ? getDefaultWorkspaceRoute() : from, { replace: true });
     } catch (error) {
       setMessage(errorMessage(error));
     } finally {

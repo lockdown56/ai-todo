@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -16,6 +16,13 @@ import {
   insertTaskAfter,
   removeTaskFromCache,
 } from "@/lib/query-utils";
+import {
+  getSelectedTaskId,
+  getTaskSort,
+  setLastWorkspaceRoute,
+  setSelectedTaskId,
+  setTaskSort,
+} from "@/lib/workspace-preferences";
 
 interface Scope {
   view?: TaskView;
@@ -42,7 +49,7 @@ export function useTaskWorkspace() {
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
-  const [sort, setSort] = useState<TaskSort>("manual");
+  const [sort, setSortState] = useState<TaskSort>("manual");
   const [confirm, setConfirm] = useState<{
     title: string;
     message: string;
@@ -65,6 +72,38 @@ export function useTaskWorkspace() {
       : { view: (params.view as TaskView | undefined) || "inbox" };
   const selectedTaskId = new URLSearchParams(location.search).get("task") || undefined;
   const scopeKey = scope.listId ? `list:${scope.listId}` : `view:${scope.view}`;
+  const isSettingsRoute = location.pathname === "/settings";
+  const isProfileRoute = location.pathname === "/profile";
+  const isUtilityRoute = isSettingsRoute || isProfileRoute;
+
+  useEffect(() => {
+    setSortState(getTaskSort(scopeKey));
+  }, [scopeKey]);
+
+  useEffect(() => {
+    if (isUtilityRoute) return;
+    setLastWorkspaceRoute(location.pathname, location.search);
+    if (selectedTaskId) {
+      setSelectedTaskId(scopeKey, selectedTaskId);
+    }
+  }, [location.pathname, location.search, scopeKey, selectedTaskId, isUtilityRoute]);
+
+  useEffect(() => {
+    if (isUtilityRoute || selectedTaskId) return;
+    const savedTaskId = getSelectedTaskId(scopeKey);
+    if (!savedTaskId) return;
+    const searchParams = new URLSearchParams(location.search);
+    searchParams.set("task", savedTaskId);
+    navigate(`${location.pathname}?${searchParams}`, { replace: true });
+  }, [scopeKey, isUtilityRoute, selectedTaskId, location.pathname, location.search, navigate]);
+
+  const setSort = useCallback(
+    (value: TaskSort) => {
+      setSortState(value);
+      setTaskSort(scopeKey, value);
+    },
+    [scopeKey],
+  );
 
   const health = useQuery({
     queryKey: queryKeys.health,
@@ -105,9 +144,6 @@ export function useTaskWorkspace() {
     [tasks.data],
   );
   const currentList = lists.data?.find((item) => item.id === scope.listId);
-  const isSettingsRoute = location.pathname === "/settings";
-  const isProfileRoute = location.pathname === "/profile";
-  const isUtilityRoute = isSettingsRoute || isProfileRoute;
 
   const toggleSidebar = () => {
     if (compactSidebar) {
@@ -143,8 +179,9 @@ export function useTaskWorkspace() {
 
   const closeDetail = useCallback(async () => {
     if (editorRef.current && !(await editorRef.current.flush())) return;
+    setSelectedTaskId(scopeKey, null);
     navigate(location.pathname);
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate, scopeKey]);
 
   const createTask = useMutation({
     mutationFn: (input: {
@@ -228,6 +265,7 @@ export function useTaskWorkspace() {
   const deleteTaskMutation = useMutation({
     mutationFn: api.deleteTask,
     onSuccess: (_, id) => {
+      setSelectedTaskId(scopeKey, null);
       navigate(location.pathname);
       invalidateTaskData(queryClient, id);
     },
@@ -235,6 +273,7 @@ export function useTaskWorkspace() {
   const restoreTaskMutation = useMutation({
     mutationFn: api.restoreTask,
     onSuccess: (task) => {
+      setSelectedTaskId(scopeKey, null);
       navigate(location.pathname);
       invalidateTaskData(queryClient, task.id);
     },
@@ -242,6 +281,7 @@ export function useTaskWorkspace() {
   const permanentTaskMutation = useMutation({
     mutationFn: api.permanentDeleteTask,
     onSuccess: (_, id) => {
+      setSelectedTaskId(scopeKey, null);
       navigate(location.pathname);
       invalidateTaskData(queryClient, id);
     },

@@ -485,6 +485,48 @@ describe("AI 清单 app", () => {
 
     expect(trigger).toHaveTextContent("优先级");
     expect(screen.queryByRole("menu", { name: "任务排序" })).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("todo-task-sorts") || "{}")).toMatchObject({
+      "view:inbox": "priority_desc",
+    });
+  });
+
+  it("restores workspace route, sort, and selected task from saved preferences", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(
+      "todo-last-workspace-route",
+      "/list/00000000-0000-4000-8000-000000000011?task=00000000-0000-4000-8000-000000000100",
+    );
+    localStorage.setItem(
+      "todo-task-sorts",
+      JSON.stringify({ "list:00000000-0000-4000-8000-000000000011": "priority_desc" }),
+    );
+    localStorage.setItem(
+      "todo-selected-tasks",
+      JSON.stringify({ "view:inbox": "00000000-0000-4000-8000-000000000100" }),
+    );
+
+    renderApp("/");
+
+    expect(await screen.findByRole("heading", { name: "工作" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "选择排序方式" })).toHaveTextContent(
+      "优先级",
+    );
+    expect(screen.getByText("编写测试")).toBeInTheDocument();
+  });
+
+  it("restores the selected task when returning to a previous scope", async () => {
+    const user = userEvent.setup();
+    renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
+
+    await screen.findByText("编写测试");
+    await user.click(screen.getByRole("button", { name: "今天" }));
+    await screen.findByRole("heading", { name: "今天" });
+
+    await user.click(screen.getByRole("button", { name: "收集箱" }));
+    expect(await screen.findByText("编写测试")).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("todo-selected-tasks") || "{}")).toMatchObject({
+      "view:inbox": "00000000-0000-4000-8000-000000000100",
+    });
   });
 
   it("auto-collapses the sidebar at medium widths without changing the saved preference", async () => {
