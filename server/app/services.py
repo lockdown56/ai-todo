@@ -16,8 +16,8 @@ from app.constants import (
     SORT_GAP,
 )
 from app.errors import ApiError
-from app.models import Tag, Task, TaskList, User
-from app.repositories import get_list, get_task, task_with_details
+from app.models import ListGroup, Tag, Task, TaskList, User
+from app.repositories import get_group, get_list, get_task, task_with_details
 from app.schemas import TaskSort, TaskView
 
 
@@ -84,6 +84,13 @@ async def require_task(
     return task
 
 
+async def require_group(session: AsyncSession, group_id: UUID) -> ListGroup:
+    group = await get_group(session, group_id)
+    if group is None:
+        raise ApiError(404, "GROUP_NOT_FOUND", "分组不存在")
+    return group
+
+
 async def require_tags(session: AsyncSession, tag_ids: list[UUID]) -> list[Tag]:
     unique_ids = list(dict.fromkeys(tag_ids))
     if not unique_ids:
@@ -136,6 +143,34 @@ async def restore_list(session: AsyncSession, task_list: TaskList) -> TaskList:
     await session.commit()
     await session.refresh(task_list)
     return task_list
+
+
+async def archive_list(session: AsyncSession, task_list: TaskList) -> TaskList:
+    if task_list.system_type == "inbox":
+        raise ApiError(409, "SYSTEM_LIST_PROTECTED", "系统收集箱不可归档")
+    if task_list.archived_at is None:
+        task_list.archived_at = datetime.now(UTC)
+        await session.commit()
+        await session.refresh(task_list)
+    return task_list
+
+
+async def unarchive_list(session: AsyncSession, task_list: TaskList) -> TaskList:
+    if task_list.archived_at is not None:
+        task_list.archived_at = None
+        await session.commit()
+        await session.refresh(task_list)
+    return task_list
+
+
+async def delete_group(session: AsyncSession, group: ListGroup) -> None:
+    await session.execute(
+        update(TaskList)
+        .where(TaskList.group_id == group.id)
+        .values(group_id=None, updated_at=datetime.now(UTC))
+    )
+    await session.delete(group)
+    await session.commit()
 
 
 async def delete_task(session: AsyncSession, task: Task) -> None:
@@ -235,6 +270,11 @@ async def list_tasks(
 ) -> tuple[list[Task], str | None]:
     query = task_with_details().where(Task.user_id == DEFAULT_USER_ID)
 
+    archived_list_ids = select(TaskList.id).where(
+        TaskList.user_id == DEFAULT_USER_ID,
+        TaskList.archived_at.is_not(None),
+    )
+
     if list_id:
         await require_list(session, list_id)
         query = query.where(
@@ -245,9 +285,17 @@ async def list_tasks(
     elif view == "trash":
         query = query.where(Task.deleted_at.is_not(None))
     elif view == "completed":
-        query = query.where(Task.deleted_at.is_(None), Task.status == 2)
+        query = query.where(
+            Task.deleted_at.is_(None),
+            Task.status == 2,
+            Task.list_id.not_in(archived_list_ids),
+        )
     else:
-        query = query.where(Task.deleted_at.is_(None), Task.status == 0)
+        query = query.where(
+            Task.deleted_at.is_(None),
+            Task.status == 0,
+            Task.list_id.not_in(archived_list_ids),
+        )
         if view == "inbox":
             inbox = await get_inbox(session)
             query = query.where(Task.list_id == inbox.id)

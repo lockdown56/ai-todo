@@ -16,7 +16,7 @@ from app.cli.inputs import (
     parse_tag_list,
 )
 from app.cli.output import render_output
-from app.cli.selectors import resolve_list, resolve_tag
+from app.cli.selectors import resolve_group, resolve_list, resolve_tag
 
 app = typer.Typer(
     help="AI 清单 CLI",
@@ -197,10 +197,18 @@ app.add_typer(list_app, name="list")
 def list_ls(
     ctx: typer.Context,
     trash: bool = typer.Option(False, "--trash", help="列出已删除清单"),
+    archived: bool = typer.Option(False, "--archived", help="列出已归档清单"),
 ) -> None:
     """列出清单"""
+    if trash and archived:
+        cli_exit_error("CLI_USAGE_ERROR", "--trash 和 --archived 互斥")
     with _make_client(ctx) as client:
-        path = "/api/v1/lists/trash" if trash else "/api/v1/lists"
+        if trash:
+            path = "/api/v1/lists/trash"
+        elif archived:
+            path = "/api/v1/lists/archived"
+        else:
+            path = "/api/v1/lists"
         data = client.get(path)
         _success(ctx, data)
 
@@ -214,8 +222,9 @@ def list_get(
     with _make_client(ctx) as client:
         list_id = resolve_list(client, list_selector)
         lists: list[dict[str, Any]] = client.get("/api/v1/lists")
+        archived: list[dict[str, Any]] = client.get("/api/v1/lists/archived")
         trash: list[dict[str, Any]] = client.get("/api/v1/lists/trash")
-        for item in lists + trash:
+        for item in lists + archived + trash:
             if item["id"] == str(list_id):
                 _success(ctx, item)
         cli_exit_error("LIST_NOT_FOUND", f"清单不存在: {list_selector}")
@@ -226,12 +235,15 @@ def list_create(
     ctx: typer.Context,
     name: str = typer.Option(..., "--name", help="清单名称"),
     color: str | None = typer.Option(None, "--color", help="颜色 (HEX)"),
+    group_selector: str | None = typer.Option(None, "--group", "-g", help="分组 UUID 或名称"),
 ) -> None:
     """创建清单"""
     body: dict[str, Any] = {"name": name}
     if color is not None:
         body["color"] = color
     with _make_client(ctx) as client:
+        if group_selector is not None:
+            body["group_id"] = str(resolve_group(client, group_selector))
         data = client.post("/api/v1/lists", json=body)
         _success(ctx, data)
 
@@ -243,8 +255,12 @@ def list_update(
     name: str | None = typer.Option(None, "--name", help="清单名称"),
     color: str | None = typer.Option(None, "--color", help="颜色 (HEX)"),
     sort_order: int | None = typer.Option(None, "--sort-order", help="排序序号"),
+    group_selector: str | None = typer.Option(None, "--group", "-g", help="分组 UUID 或名称"),
+    clear_group: bool = typer.Option(False, "--clear-group", help="从分组中移出"),
 ) -> None:
     """更新清单"""
+    if group_selector is not None and clear_group:
+        cli_exit_error("CLI_USAGE_ERROR", "--group 和 --clear-group 互斥")
     body: dict[str, Any] = {}
     if name is not None:
         body["name"] = name
@@ -252,11 +268,39 @@ def list_update(
         body["color"] = color
     if sort_order is not None:
         body["sort_order"] = sort_order
-    if not body:
+    if clear_group:
+        body["group_id"] = None
+    if not body and group_selector is None:
         cli_exit_error("CLI_USAGE_ERROR", "至少提供一个待修改字段")
     with _make_client(ctx) as client:
+        if group_selector is not None:
+            body["group_id"] = str(resolve_group(client, group_selector))
         list_id = resolve_list(client, list_selector)
         data = client.patch(f"/api/v1/lists/{list_id}", json=body)
+        _success(ctx, data)
+
+
+@list_app.command("archive")
+def list_archive(
+    ctx: typer.Context,
+    list_selector: str = typer.Argument(..., help="清单 UUID 或名称"),
+) -> None:
+    """归档清单"""
+    with _make_client(ctx) as client:
+        list_id = resolve_list(client, list_selector)
+        data = client.post(f"/api/v1/lists/{list_id}/archive")
+        _success(ctx, data)
+
+
+@list_app.command("unarchive")
+def list_unarchive(
+    ctx: typer.Context,
+    list_selector: str = typer.Argument(..., help="清单 UUID 或名称"),
+) -> None:
+    """取消归档清单"""
+    with _make_client(ctx) as client:
+        list_id = resolve_list(client, list_selector)
+        data = client.post(f"/api/v1/lists/{list_id}/unarchive")
         _success(ctx, data)
 
 
@@ -297,6 +341,86 @@ def list_purge(
         list_id = resolve_list(client, list_selector)
         client.delete(f"/api/v1/lists/{list_id}/permanent")
         _success(ctx, {"id": str(list_id), "deleted": True, "permanent": True})
+
+
+# ---------------------------------------------------------------------------
+# List group commands
+# ---------------------------------------------------------------------------
+group_app = typer.Typer(help="清单分组管理", no_args_is_help=True)
+app.add_typer(group_app, name="group")
+
+
+@group_app.command("ls")
+def group_ls(ctx: typer.Context) -> None:
+    """列出分组"""
+    with _make_client(ctx) as client:
+        data = client.get("/api/v1/list-groups")
+        _success(ctx, data)
+
+
+@group_app.command("get")
+def group_get(
+    ctx: typer.Context,
+    group_selector: str = typer.Argument(..., help="分组 UUID 或名称"),
+) -> None:
+    """获取分组详情"""
+    with _make_client(ctx) as client:
+        group_id = resolve_group(client, group_selector)
+        groups: list[dict[str, Any]] = client.get("/api/v1/list-groups")
+        for item in groups:
+            if item["id"] == str(group_id):
+                _success(ctx, item)
+        cli_exit_error("GROUP_NOT_FOUND", f"分组不存在: {group_selector}")
+
+
+@group_app.command("create")
+def group_create(
+    ctx: typer.Context,
+    name: str = typer.Option(..., "--name", help="分组名称"),
+) -> None:
+    """创建分组"""
+    with _make_client(ctx) as client:
+        data = client.post("/api/v1/list-groups", json={"name": name})
+        _success(ctx, data)
+
+
+@group_app.command("update")
+def group_update(
+    ctx: typer.Context,
+    group_selector: str = typer.Argument(..., help="分组 UUID 或名称"),
+    name: str | None = typer.Option(None, "--name", help="分组名称"),
+    sort_order: int | None = typer.Option(None, "--sort-order", help="排序序号"),
+    collapsed: bool | None = typer.Option(None, "--collapsed/--expanded", help="折叠或展开分组"),
+) -> None:
+    """更新分组"""
+    body: dict[str, Any] = {}
+    if name is not None:
+        body["name"] = name
+    if sort_order is not None:
+        body["sort_order"] = sort_order
+    if collapsed is not None:
+        body["is_collapsed"] = collapsed
+    if not body:
+        cli_exit_error("CLI_USAGE_ERROR", "至少提供一个待修改字段")
+    with _make_client(ctx) as client:
+        group_id = resolve_group(client, group_selector)
+        data = client.patch(f"/api/v1/list-groups/{group_id}", json=body)
+        _success(ctx, data)
+
+
+@group_app.command("delete")
+def group_delete(
+    ctx: typer.Context,
+    group_selector: str = typer.Argument(..., help="分组 UUID 或名称"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="确认删除"),
+) -> None:
+    """删除分组（清单将移出分组，不受影响）"""
+    if not yes:
+        cli_exit_error("CONFIRMATION_REQUIRED", "分组删除是永久操作，需要 --yes 确认")
+    with _make_client(ctx) as client:
+        group_id = resolve_group(client, group_selector)
+        client.delete(f"/api/v1/list-groups/{group_id}")
+        _success(ctx, {"id": str(group_id), "deleted": True, "permanent": True})
 
 
 # ---------------------------------------------------------------------------

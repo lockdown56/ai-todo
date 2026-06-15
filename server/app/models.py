@@ -44,8 +44,23 @@ class User(TimestampMixin, Base):
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     lists: Mapped[list[TaskList]] = relationship(back_populates="user")
+    list_groups: Mapped[list[ListGroup]] = relationship(back_populates="user")
     tasks: Mapped[list[Task]] = relationship(back_populates="user")
     tags: Mapped[list[Tag]] = relationship(back_populates="user")
+
+
+class ListGroup(TimestampMixin, Base):
+    __tablename__ = "list_groups"
+    __table_args__ = (Index("ix_list_groups_user_sort", "user_id", "sort_order"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    sort_order: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    is_collapsed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    user: Mapped[User] = relationship(back_populates="list_groups")
+    lists: Mapped[list[TaskList]] = relationship(back_populates="group")
 
 
 class TaskList(TimestampMixin, Base):
@@ -64,14 +79,17 @@ class TaskList(TimestampMixin, Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    group_id: Mapped[UUID | None] = mapped_column(ForeignKey("list_groups.id", ondelete="SET NULL"))
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     color: Mapped[str] = mapped_column(String(7), nullable=False, default="#6C5CE7")
     system_type: Mapped[str | None] = mapped_column(String(20))
     sort_order: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deletion_batch_id: Mapped[UUID | None]
 
     user: Mapped[User] = relationship(back_populates="lists")
+    group: Mapped[ListGroup | None] = relationship(back_populates="lists")
     tasks: Mapped[list[Task]] = relationship(back_populates="task_list")
 
 

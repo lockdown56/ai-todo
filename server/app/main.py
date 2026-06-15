@@ -8,7 +8,7 @@ from app.auth import require_auth
 from app.config import get_settings
 from app.database import SessionLocal
 from app.errors import ApiError, api_error_handler, validation_error_handler
-from app.routers import auth, checklist, health, lists, tags, tasks
+from app.routers import auth, checklist, groups, health, lists, tags, tasks
 from app.services import initialize_data
 
 
@@ -34,6 +34,7 @@ def create_app(*, initialize: bool = True) -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     protected = [Depends(require_auth)]
+    app.include_router(groups.router, dependencies=protected)
     app.include_router(lists.router, dependencies=protected)
     app.include_router(tasks.router, dependencies=protected)
     app.include_router(checklist.router, dependencies=protected)

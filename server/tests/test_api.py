@@ -81,6 +81,101 @@ async def test_list_crud_and_system_list_protection(client):
 
 
 @pytest.mark.asyncio
+async def test_list_groups_crud_and_list_assignment(client):
+    group = await client.post("/api/v1/list-groups", json={"name": " 个人 "})
+    assert group.status_code == 201
+    group_body = group.json()
+    assert group_body["name"] == "个人"
+    assert group_body["is_collapsed"] is False
+
+    listed = await client.get("/api/v1/list-groups")
+    assert [item["id"] for item in listed.json()] == [group_body["id"]]
+
+    created = await client.post(
+        "/api/v1/lists",
+        json={"name": "阅读", "color": "#6C5CE7", "group_id": group_body["id"]},
+    )
+    assert created.status_code == 201
+    assert created.json()["group_id"] == group_body["id"]
+
+    collapsed = await client.patch(
+        f"/api/v1/list-groups/{group_body['id']}",
+        json={"name": "生活", "is_collapsed": True},
+    )
+    assert collapsed.status_code == 200
+    assert collapsed.json()["name"] == "生活"
+    assert collapsed.json()["is_collapsed"] is True
+
+    missing_group = await client.post(
+        "/api/v1/lists",
+        json={"name": "无效分组", "group_id": "00000000-0000-4000-8000-0000000000ff"},
+    )
+    assert missing_group.status_code == 404
+    assert missing_group.json()["error"]["code"] == "GROUP_NOT_FOUND"
+
+    cleared = await client.patch(
+        f"/api/v1/lists/{created.json()['id']}",
+        json={"group_id": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["group_id"] is None
+
+    regrouped = await client.patch(
+        f"/api/v1/lists/{created.json()['id']}",
+        json={"group_id": group_body["id"]},
+    )
+    assert regrouped.json()["group_id"] == group_body["id"]
+
+    deleted = await client.delete(f"/api/v1/list-groups/{group_body['id']}")
+    assert deleted.status_code == 204
+    # The list survives group deletion and is ungrouped.
+    active = await client.get("/api/v1/lists")
+    survivor = next(item for item in active.json() if item["id"] == created.json()["id"])
+    assert survivor["group_id"] is None
+    assert (await client.get("/api/v1/list-groups")).json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_archive_hides_from_active_and_excludes_tasks(client):
+    task_list = (
+        await client.post("/api/v1/lists", json={"name": "归档项目", "color": "#6C5CE7"})
+    ).json()
+    task = (
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "归档任务", "list_id": task_list["id"]},
+        )
+    ).json()
+
+    archived = await client.post(f"/api/v1/lists/{task_list['id']}/archive")
+    assert archived.status_code == 200
+    assert archived.json()["archived_at"] is not None
+
+    active = await client.get("/api/v1/lists")
+    assert task_list["id"] not in {item["id"] for item in active.json()}
+
+    archived_lists = await client.get("/api/v1/lists/archived")
+    assert task_list["id"] in {item["id"] for item in archived_lists.json()}
+
+    all_view = await client.get("/api/v1/tasks", params={"view": "all"})
+    assert task["id"] not in {item["id"] for item in all_view.json()["items"]}
+
+    direct = await client.get("/api/v1/tasks", params={"list_id": task_list["id"]})
+    assert task["id"] in {item["id"] for item in direct.json()["items"]}
+
+    inbox = await get_inbox(client)
+    protected = await client.post(f"/api/v1/lists/{inbox['id']}/archive")
+    assert protected.status_code == 409
+    assert protected.json()["error"]["code"] == "SYSTEM_LIST_PROTECTED"
+
+    unarchived = await client.post(f"/api/v1/lists/{task_list['id']}/unarchive")
+    assert unarchived.status_code == 200
+    assert unarchived.json()["archived_at"] is None
+    restored_view = await client.get("/api/v1/tasks", params={"view": "all"})
+    assert task["id"] in {item["id"] for item in restored_view.json()["items"]}
+
+
+@pytest.mark.asyncio
 async def test_task_views_search_sort_and_state_transitions(client):
     inbox = await get_inbox(client)
     first = await client.post(

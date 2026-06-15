@@ -170,10 +170,12 @@ todo health
 ### 5.2 清单
 
 ```text
-todo list ls [--trash]
+todo list ls [--trash | --archived]
 todo list get LIST
-todo list create --name NAME [--color HEX]
-todo list update LIST [--name NAME] [--color HEX] [--sort-order INTEGER]
+todo list create --name NAME [--color HEX] [--group GROUP]
+todo list update LIST [--name NAME] [--color HEX] [--sort-order INTEGER] [--group GROUP | --clear-group]
+todo list archive LIST
+todo list unarchive LIST
 todo list delete LIST
 todo list restore LIST
 todo list purge LIST --yes
@@ -181,10 +183,27 @@ todo list purge LIST --yes
 
 行为：
 
-- `ls` 默认列出活动清单，`--trash` 列出已删除清单。
-- `get` 在活动清单和回收站中解析目标。
+- `ls` 默认列出活动清单，`--trash` 列出已删除清单，`--archived` 列出已归档清单（两者互斥）。
+- `get` 在活动清单、归档清单和回收站中解析目标。
 - `delete` 是软删除，同时按服务端批次规则删除所属任务。
 - `purge` 对应永久删除；系统收集箱仍由服务端拒绝。
+- `archive` 将清单从主视图与聚合任务视图中隐藏但保留任务，可用 `unarchive` 还原；系统收集箱不可归档。
+- `--group` 接受分组 UUID 或名称，`--clear-group` 将清单移出分组；两者互斥。
+
+### 5.2.1 清单分组
+
+```text
+todo group ls
+todo group get GROUP
+todo group create --name NAME
+todo group update GROUP [--name NAME] [--sort-order INTEGER] [--collapsed | --expanded]
+todo group delete GROUP --yes
+```
+
+行为：
+
+- 分组是清单的容器，清单通过 `group_id` 归属，未归属时视为未分组。
+- `delete` 永久删除分组，组内清单的 `group_id` 被置空但清单本身保留，因此要求 `--yes`。
 
 ### 5.3 任务
 

@@ -17,8 +17,9 @@ def resolve_list(client: ApiClient, selector: str) -> UUID:
         cli_exit_error("INVALID_SELECTOR", "清单选择器不能为空")
 
     active: list[dict[str, Any]] = client.get("/api/v1/lists")
+    archived: list[dict[str, Any]] = client.get("/api/v1/lists/archived")
     trash: list[dict[str, Any]] = client.get("/api/v1/lists/trash")
-    all_lists = active + trash
+    all_lists = active + archived + trash
 
     matches = [item for item in all_lists if item["name"].strip().lower() == name.lower()]
 
@@ -29,6 +30,31 @@ def resolve_list(client: ApiClient, selector: str) -> UUID:
         cli_exit_error(
             "AMBIGUOUS_SELECTOR",
             f"清单名称匹配到多个资源: {selector}",
+            fields={"candidates": ids},
+        )
+    return UUID(matches[0]["id"])
+
+
+def resolve_group(client: ApiClient, selector: str) -> UUID:
+    try:
+        return UUID(selector)
+    except ValueError:
+        pass
+
+    name = selector.strip()
+    if not name:
+        cli_exit_error("INVALID_SELECTOR", "分组选择器不能为空")
+
+    groups: list[dict[str, Any]] = client.get("/api/v1/list-groups")
+    matches = [item for item in groups if item["name"].strip().lower() == name.lower()]
+
+    if not matches:
+        cli_exit_error("GROUP_NOT_FOUND", f"分组不存在: {selector}")
+    if len(matches) > 1:
+        ids = [item["id"] for item in matches]
+        cli_exit_error(
+            "AMBIGUOUS_SELECTOR",
+            f"分组名称匹配到多个资源: {selector}",
             fields={"candidates": ids},
         )
     return UUID(matches[0]["id"])

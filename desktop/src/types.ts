@@ -30,10 +30,21 @@ export interface TaskList {
   name: string;
   color: string;
   system_type: "inbox" | null;
+  group_id: string | null;
   sort_order: number;
   task_count: number;
+  archived_at: string | null;
   deleted_at: string | null;
   deletion_batch_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListGroup {
+  id: string;
+  name: string;
+  sort_order: number;
+  is_collapsed: boolean;
   created_at: string;
   updated_at: string;
 }

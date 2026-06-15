@@ -30,9 +30,43 @@ class AuthTokenResponse(BaseModel):
     user: AuthUserResponse
 
 
+class ListGroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        if not (cleaned := value.strip()):
+            raise ValueError("分组名称不能为空")
+        return cleaned
+
+
+class ListGroupUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    sort_order: int | None = None
+    is_collapsed: bool | None = None
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str | None) -> str | None:
+        if value is not None and not (value := value.strip()):
+            raise ValueError("分组名称不能为空")
+        return value
+
+
+class ListGroupResponse(ApiModel):
+    id: UUID
+    name: str
+    sort_order: int
+    is_collapsed: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 class ListCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     color: str = Field(default="#6C5CE7", pattern=HEX_COLOR)
+    group_id: UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -46,6 +80,7 @@ class ListUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     color: str | None = Field(default=None, pattern=HEX_COLOR)
     sort_order: int | None = None
+    group_id: UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -60,8 +95,10 @@ class ListResponse(ApiModel):
     name: str
     color: str
     system_type: str | None
+    group_id: UUID | None
     sort_order: int
     task_count: int = 0
+    archived_at: datetime | None
     deleted_at: datetime | None
     deletion_batch_id: UUID | None
     created_at: datetime

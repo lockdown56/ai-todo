@@ -647,6 +647,8 @@ describe("AI 清单 app", () => {
       ),
       http.get("http://127.0.0.1:9000/api/v1/lists", () => HttpResponse.json([])),
       http.get("http://127.0.0.1:9000/api/v1/lists/trash", () => HttpResponse.json([])),
+      http.get("http://127.0.0.1:9000/api/v1/lists/archived", () => HttpResponse.json([])),
+      http.get("http://127.0.0.1:9000/api/v1/list-groups", () => HttpResponse.json([])),
       http.get("http://127.0.0.1:9000/api/v1/tags", () => HttpResponse.json([])),
       http.get("http://127.0.0.1:9000/api/v1/tasks", () =>
         HttpResponse.json({ items: [], next_cursor: null }),

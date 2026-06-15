@@ -135,6 +135,89 @@
   overflow-y: auto;
 }
 
+.lists-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.lists-scroll .custom-lists {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.lists-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.list-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-group-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.list-group-toggle {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  flex: 1;
+  justify-content: flex-start;
+  gap: 11px;
+  padding: 0 11px;
+  padding-right: 46px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.list-group-toggle svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.list-group-toggle .nav-label {
+  flex: 1;
+  letter-spacing: normal;
+}
+
+.list-group-header .list-menu-button {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  opacity: 0;
+}
+
+.list-group-header:hover .list-menu-button,
+.list-group-header:focus-within .list-menu-button,
+.list-group-header .list-menu-button[data-state="open"] {
+  opacity: 1;
+}
+
+.group-lists {
+  padding-left: 0;
+}
+
+.archived-group {
+  margin-top: 4px;
+}
+
+.archived-empty {
+  display: block;
+  padding: 6px 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
 .sidebar-settings {
   flex: 0 0 auto;
   margin-top: auto;
@@ -177,6 +260,15 @@
 .list-tooltip span {
   color: var(--muted-foreground);
   font-size: 12px;
+}
+
+.nav-icon-slot {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  align-items: center;
+  justify-content: center;
 }
 
 .list-dot {
@@ -223,6 +315,12 @@
 .custom-list-wrap:hover .nav-count,
 .custom-list-wrap:focus-within .nav-count,
 .custom-list-wrap:has(.list-menu-button[data-state="open"]) .nav-count {
+  opacity: 0;
+}
+
+.list-group-header:hover .nav-count,
+.list-group-header:focus-within .nav-count,
+.list-group-header:has(.list-menu-button[data-state="open"]) .nav-count {
   opacity: 0;
 }
 

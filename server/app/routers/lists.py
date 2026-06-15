@@ -9,7 +9,14 @@ from app.database import get_session
 from app.models import Task, TaskList
 from app.repositories import next_sort_order
 from app.schemas import ListCreate, ListResponse, ListUpdate
-from app.services import delete_list, require_list, restore_list
+from app.services import (
+    archive_list,
+    delete_list,
+    require_group,
+    require_list,
+    restore_list,
+    unarchive_list,
+)
 
 router = APIRouter(prefix="/api/v1/lists", tags=["lists"])
 
@@ -18,9 +25,8 @@ def serialize_list(task_list: TaskList, task_count: int = 0) -> ListResponse:
     return ListResponse.model_validate(task_list).model_copy(update={"task_count": task_count})
 
 
-@router.get("", response_model=list[ListResponse])
-async def get_lists(session: AsyncSession = Depends(get_session)):
-    count_subquery = (
+def _task_count_subquery():
+    return (
         select(Task.list_id, func.count(Task.id).label("task_count"))
         .where(
             Task.user_id == DEFAULT_USER_ID,
@@ -30,6 +36,11 @@ async def get_lists(session: AsyncSession = Depends(get_session)):
         .group_by(Task.list_id)
         .subquery()
     )
+
+
+@router.get("", response_model=list[ListResponse])
+async def get_lists(session: AsyncSession = Depends(get_session)):
+    count_subquery = _task_count_subquery()
     rows = (
         await session.execute(
             select(TaskList, func.coalesce(count_subquery.c.task_count, 0))
@@ -37,8 +48,27 @@ async def get_lists(session: AsyncSession = Depends(get_session)):
             .where(
                 TaskList.user_id == DEFAULT_USER_ID,
                 TaskList.deleted_at.is_(None),
+                TaskList.archived_at.is_(None),
             )
             .order_by(TaskList.sort_order, TaskList.id)
+        )
+    ).all()
+    return [serialize_list(task_list, count) for task_list, count in rows]
+
+
+@router.get("/archived", response_model=list[ListResponse])
+async def get_archived_lists(session: AsyncSession = Depends(get_session)):
+    count_subquery = _task_count_subquery()
+    rows = (
+        await session.execute(
+            select(TaskList, func.coalesce(count_subquery.c.task_count, 0))
+            .outerjoin(count_subquery, count_subquery.c.list_id == TaskList.id)
+            .where(
+                TaskList.user_id == DEFAULT_USER_ID,
+                TaskList.deleted_at.is_(None),
+                TaskList.archived_at.is_not(None),
+            )
+            .order_by(TaskList.archived_at.desc())
         )
     ).all()
     return [serialize_list(task_list, count) for task_list, count in rows]
@@ -61,10 +91,13 @@ async def get_trash_lists(session: AsyncSession = Depends(get_session)):
 
 @router.post("", response_model=ListResponse, status_code=status.HTTP_201_CREATED)
 async def create_list(payload: ListCreate, session: AsyncSession = Depends(get_session)):
+    if payload.group_id is not None:
+        await require_group(session, payload.group_id)
     task_list = TaskList(
         user_id=DEFAULT_USER_ID,
         name=payload.name,
         color=payload.color.upper(),
+        group_id=payload.group_id,
         sort_order=await next_sort_order(
             session,
             TaskList,
@@ -88,11 +121,25 @@ async def update_list(
     changes = payload.model_dump(exclude_unset=True)
     if "color" in changes:
         changes["color"] = changes["color"].upper()
+    if changes.get("group_id") is not None:
+        await require_group(session, changes["group_id"])
     for key, value in changes.items():
         setattr(task_list, key, value)
     await session.commit()
     await session.refresh(task_list)
     return serialize_list(task_list)
+
+
+@router.post("/{list_id}/archive", response_model=ListResponse)
+async def archive_task_list(list_id: UUID, session: AsyncSession = Depends(get_session)):
+    task_list = await require_list(session, list_id)
+    return serialize_list(await archive_list(session, task_list))
+
+
+@router.post("/{list_id}/unarchive", response_model=ListResponse)
+async def unarchive_task_list(list_id: UUID, session: AsyncSession = Depends(get_session)):
+    task_list = await require_list(session, list_id)
+    return serialize_list(await unarchive_list(session, task_list))
 
 
 @router.delete("/{list_id}", status_code=status.HTTP_204_NO_CONTENT)

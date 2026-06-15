@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.constants import DEFAULT_USER_ID
-from app.models import ChecklistItem, Tag, Task, TaskList
+from app.models import ChecklistItem, ListGroup, Tag, Task, TaskList
 
 
 def task_with_details() -> Select[tuple[Task]]:
@@ -58,9 +58,18 @@ async def get_tag(session: AsyncSession, tag_id: UUID) -> Tag | None:
     return await session.scalar(select(Tag).where(Tag.id == tag_id, Tag.user_id == DEFAULT_USER_ID))
 
 
+async def get_group(session: AsyncSession, group_id: UUID) -> ListGroup | None:
+    return await session.scalar(
+        select(ListGroup).where(
+            ListGroup.id == group_id,
+            ListGroup.user_id == DEFAULT_USER_ID,
+        )
+    )
+
+
 async def next_sort_order(
     session: AsyncSession,
-    model: type[TaskList] | type[Task] | type[ChecklistItem],
+    model: type[TaskList] | type[Task] | type[ChecklistItem] | type[ListGroup],
     *conditions: object,
 ) -> int:
     current = await session.scalar(select(func.max(model.sort_order)).where(*conditions))

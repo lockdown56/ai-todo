@@ -9,8 +9,10 @@ export const inbox: TaskList = {
   name: "收集箱",
   color: "#4F6FAE",
   system_type: "inbox",
+  group_id: null,
   sort_order: 1024,
   task_count: 1,
+  archived_at: null,
   deleted_at: null,
   deletion_batch_id: null,
   created_at: now,
@@ -106,6 +108,12 @@ export const handlers = [
     HttpResponse.json([inbox, workList]),
   ),
   http.get("http://127.0.0.1:8000/api/v1/lists/trash", () =>
+    HttpResponse.json([]),
+  ),
+  http.get("http://127.0.0.1:8000/api/v1/lists/archived", () =>
+    HttpResponse.json([]),
+  ),
+  http.get("http://127.0.0.1:8000/api/v1/list-groups", () =>
     HttpResponse.json([]),
   ),
   http.get("http://127.0.0.1:8000/api/v1/tags", () =>

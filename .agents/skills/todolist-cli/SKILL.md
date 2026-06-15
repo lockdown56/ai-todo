@@ -52,13 +52,25 @@ todo task purge TASK_ID --yes
 ### 清单 (list)
 
 ```bash
-todo list ls [--trash]
+todo list ls [--trash | --archived]
 todo list get SELECTOR          # UUID 或名称
-todo list create --name NAME [--color HEX]
-todo list update SELECTOR [--name ...] [--color ...] [--sort-order N]
+todo list create --name NAME [--color HEX] [--group GROUP]
+todo list update SELECTOR [--name ...] [--color ...] [--sort-order N] [--group GROUP | --clear-group]
+todo list archive SELECTOR      # 归档（从主视图隐藏，任务保留，可还原）
+todo list unarchive SELECTOR    # 取消归档
 todo list delete SELECTOR
 todo list restore SELECTOR
 todo list purge SELECTOR --yes
+```
+
+### 清单分组 (group)
+
+```bash
+todo group ls
+todo group get SELECTOR          # UUID 或名称
+todo group create --name NAME
+todo group update SELECTOR [--name ...] [--sort-order N] [--collapsed | --expanded]
+todo group delete SELECTOR --yes # 删除分组，组内清单移出分组但保留
 ```
 
 ### 标签 (tag)

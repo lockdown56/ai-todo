@@ -12,6 +12,7 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 import { ConnectionError } from "@/components/ConnectionError";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ListDialog } from "@/components/ListDialog";
+import { GroupDialog } from "@/components/GroupDialog";
 import { DeletedLists } from "@/components/DeletedLists";
 import { viewNames, priorityShortcutValues } from "@/lib/constants";
 import { errorMessage } from "@/lib/error-utils";
@@ -34,6 +35,10 @@ export function DesktopShell() {
     setConfirm,
     listDialog,
     setListDialog,
+    groupDialog,
+    setGroupDialog,
+    showArchived,
+    setShowArchived,
     compactSidebar,
     detailDrawer,
     effectiveSidebarCollapsed,
@@ -42,7 +47,9 @@ export function DesktopShell() {
     
     health,
     lists,
+    listGroups,
     trashLists,
+    archivedLists,
     tags,
     tasks,
     taskItems,
@@ -79,6 +86,12 @@ export function DesktopShell() {
     : scope.listId
       ? currentList?.name || "清单"
       : viewNames[scope.view || "inbox"];
+
+  const invalidateListData = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.listGroups });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.archivedLists });
+  };
 
   useEffect(() => {
     if (!compactSidebar) setSidebarOverlayOpen(false);
@@ -202,10 +215,14 @@ export function DesktopShell() {
           collapsed={effectiveSidebarCollapsed}
           currentPath={location.pathname}
           lists={lists.data || []}
+          groups={listGroups.data || []}
+          archivedLists={archivedLists.data || []}
+          showArchived={showArchived}
           scope={scope}
           onToggle={toggleSidebar}
           onNavigate={navigateAfterFlush}
           onAdd={() => setListDialog({ mode: "create" })}
+          onAddGroup={() => setGroupDialog({ mode: "create" })}
           onEdit={(list) => setListDialog({ mode: "rename", list })}
           onColor={(list) => setListDialog({ mode: "color", list })}
           onDelete={(list) =>
@@ -215,11 +232,43 @@ export function DesktopShell() {
               action: () => {
                 void api.deleteList(list.id).then(() => {
                   setConfirm(null);
-                  void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
+                  invalidateListData();
                   navigate("/view/inbox");
                 });
               },
             })
+          }
+          onArchive={(list) =>
+            void api.archiveList(list.id).then(() => {
+              invalidateListData();
+              if (scope.listId === list.id) navigate("/view/inbox");
+            })
+          }
+          onMoveToGroup={(list, groupId) =>
+            void api.updateList(list.id, { group_id: groupId }).then(invalidateListData)
+          }
+          onRenameGroup={(group) => setGroupDialog({ mode: "rename", group })}
+          onDeleteGroup={(group) =>
+            setConfirm({
+              title: "删除分组",
+              message: `“${group.name}”将被删除，组内清单会移出分组但保留。`,
+              action: () => {
+                void api.deleteGroup(group.id).then(() => {
+                  setConfirm(null);
+                  invalidateListData();
+                });
+              },
+            })
+          }
+          onToggleGroupCollapse={(group) =>
+            void api
+              .updateGroup(group.id, { is_collapsed: !group.is_collapsed })
+              .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.listGroups }))
+          }
+          onAddListToGroup={(groupId) => setListDialog({ mode: "create", groupId })}
+          onToggleArchived={() => setShowArchived((value) => !value)}
+          onUnarchive={(list) =>
+            void api.unarchiveList(list.id).then(invalidateListData)
           }
         />
         {compactSidebar && sidebarOverlayOpen && (
@@ -349,14 +398,31 @@ export function DesktopShell() {
           onClose={() => setListDialog(null)}
           onSubmit={async ({ name, color }) => {
             if (listDialog.mode === "create") {
-              await api.createList({ name, color });
+              await api.createList({ name, color, group_id: listDialog.groupId ?? null });
             } else if (listDialog.list && listDialog.mode === "rename") {
               await api.updateList(listDialog.list.id, { name });
             } else if (listDialog.list) {
               await api.updateList(listDialog.list.id, { color });
             }
             setListDialog(null);
-            await queryClient.invalidateQueries({ queryKey: queryKeys.lists });
+            invalidateListData();
+          }}
+        />
+      )}
+      {groupDialog && (
+        <GroupDialog
+          key={`${groupDialog.mode}:${groupDialog.group?.id || "new"}`}
+          mode={groupDialog.mode}
+          group={groupDialog.group}
+          onClose={() => setGroupDialog(null)}
+          onSubmit={async ({ name }) => {
+            if (groupDialog.mode === "create") {
+              await api.createGroup({ name });
+            } else if (groupDialog.group) {
+              await api.updateGroup(groupDialog.group.id, { name });
+            }
+            setGroupDialog(null);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.listGroups });
           }}
         />
       )}

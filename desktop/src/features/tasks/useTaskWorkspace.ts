@@ -8,7 +8,7 @@ import {
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "@/api";
 import { queryKeys } from "@/query";
-import type { Task, TaskList, TaskSort, TaskView } from "@/types";
+import type { ListGroup, Task, TaskList, TaskSort, TaskView } from "@/types";
 import { useDebouncedValue, useWindowWidth } from "@/lib/hooks";
 import {
   invalidateTaskData,
@@ -51,7 +51,13 @@ export function useTaskWorkspace() {
   const [listDialog, setListDialog] = useState<{
     mode: "create" | "rename" | "color";
     list?: TaskList;
+    groupId?: string;
   } | null>(null);
+  const [groupDialog, setGroupDialog] = useState<{
+    mode: "create" | "rename";
+    group?: ListGroup;
+  } | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const scope: Scope =
     params.listId !== undefined
@@ -67,10 +73,16 @@ export function useTaskWorkspace() {
     refetchInterval: 30_000,
   });
   const lists = useQuery({ queryKey: queryKeys.lists, queryFn: api.lists });
+  const listGroups = useQuery({ queryKey: queryKeys.listGroups, queryFn: api.listGroups });
   const trashLists = useQuery({
     queryKey: queryKeys.trashLists,
     queryFn: api.trashLists,
     enabled: scope.view === "trash",
+  });
+  const archivedLists = useQuery({
+    queryKey: queryKeys.archivedLists,
+    queryFn: api.archivedLists,
+    enabled: showArchived,
   });
   const tags = useQuery({ queryKey: queryKeys.tags, queryFn: api.tags });
   const tasks = useInfiniteQuery({
@@ -248,6 +260,10 @@ export function useTaskWorkspace() {
     setConfirm,
     listDialog,
     setListDialog,
+    groupDialog,
+    setGroupDialog,
+    showArchived,
+    setShowArchived,
     sidebarCollapsed,
     setSidebarCollapsed,
     sidebarOverlayOpen,
@@ -259,7 +275,9 @@ export function useTaskWorkspace() {
     // Queries
     health,
     lists,
+    listGroups,
     trashLists,
+    archivedLists,
     tags,
     tasks,
     taskItems,

@@ -17,7 +17,7 @@ import { viewNames } from "@/lib/constants";
 import { errorMessage } from "@/lib/error-utils";
 import { api } from "@/api";
 import { queryKeys } from "@/query";
-import type { TaskView, TaskList } from "@/types";
+import type { ListGroup, TaskView, TaskList } from "@/types";
 
 const mobileNavItems = [
   { view: "inbox" as TaskView, icon: Inbox, label: "收集箱" },
@@ -49,6 +49,7 @@ export function MobileShell() {
 
     health,
     lists,
+    listGroups,
     tasks,
     taskItems,
     currentList,
@@ -220,6 +221,7 @@ export function MobileShell() {
       {moreOpen && (
         <MobileMoreDrawer
           lists={lists.data || []}
+          groups={listGroups.data || []}
           currentPath={location.pathname}
           onNavigate={navigateFromDrawer}
           onClose={() => setMoreOpen(false)}
@@ -264,16 +266,30 @@ function MobileSubPage({
 
 function MobileMoreDrawer({
   lists,
+  groups,
   currentPath,
   onNavigate,
   onClose,
 }: {
   lists: TaskList[];
+  groups: ListGroup[];
   currentPath: string;
   onNavigate: (path: string) => void;
   onClose: () => void;
 }) {
   const customLists = lists.filter((list) => !list.system_type);
+  const ungrouped = customLists.filter((list) => !list.group_id);
+  const renderList = (list: TaskList) => (
+    <Button
+      key={list.id}
+      variant="ghost"
+      className={`mobile-more-item ${currentPath === `/list/${list.id}` ? "active" : ""}`}
+      onClick={() => onNavigate(`/list/${list.id}`)}
+    >
+      <span className="list-dot" style={{ backgroundColor: list.color }} />
+      <span>{list.name}</span>
+    </Button>
+  );
   return (
     <>
       <button
@@ -308,18 +324,18 @@ function MobileMoreDrawer({
               <div className="mobile-more-divider" />
               <div className="mobile-more-section">
                 <span className="mobile-more-section-title">清单</span>
-                {customLists.map((list) => (
-                  <Button
-                    key={list.id}
-                    variant="ghost"
-                    className={`mobile-more-item ${currentPath === `/list/${list.id}` ? "active" : ""}`}
-                    onClick={() => onNavigate(`/list/${list.id}`)}
-                  >
-                    <span className="list-dot" style={{ backgroundColor: list.color }} />
-                    <span>{list.name}</span>
-                  </Button>
-                ))}
+                {ungrouped.map(renderList)}
               </div>
+              {groups.map((group) => {
+                const groupLists = customLists.filter((list) => list.group_id === group.id);
+                if (groupLists.length === 0) return null;
+                return (
+                  <div className="mobile-more-section" key={group.id}>
+                    <span className="mobile-more-section-title">{group.name}</span>
+                    {groupLists.map(renderList)}
+                  </div>
+                );
+              })}
             </>
           )}
           <div className="mobile-more-divider" />

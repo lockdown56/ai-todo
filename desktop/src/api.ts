@@ -4,6 +4,7 @@ import type {
   AuthUser,
   ChecklistItem,
   Health,
+  ListGroup,
   Tag,
   Task,
   TaskList,
@@ -130,14 +131,26 @@ export const api = {
 
   lists: () => request<TaskList[]>("/api/v1/lists"),
   trashLists: () => request<TaskList[]>("/api/v1/lists/trash"),
-  createList: (body: { name: string; color: string }) =>
+  archivedLists: () => request<TaskList[]>("/api/v1/lists/archived"),
+  createList: (body: { name: string; color: string; group_id?: string | null }) =>
     request<TaskList>("/api/v1/lists", json("POST", body)),
-  updateList: (id: string, body: Partial<Pick<TaskList, "name" | "color" | "sort_order">>) =>
-    request<TaskList>(`/api/v1/lists/${id}`, json("PATCH", body)),
+  updateList: (
+    id: string,
+    body: Partial<Pick<TaskList, "name" | "color" | "sort_order" | "group_id">>,
+  ) => request<TaskList>(`/api/v1/lists/${id}`, json("PATCH", body)),
   deleteList: (id: string) => request<void>(`/api/v1/lists/${id}`, json("DELETE")),
   restoreList: (id: string) => request<TaskList>(`/api/v1/lists/${id}/restore`, json("POST")),
   permanentDeleteList: (id: string) =>
     request<void>(`/api/v1/lists/${id}/permanent`, json("DELETE")),
+  archiveList: (id: string) => request<TaskList>(`/api/v1/lists/${id}/archive`, json("POST")),
+  unarchiveList: (id: string) => request<TaskList>(`/api/v1/lists/${id}/unarchive`, json("POST")),
+
+  listGroups: () => request<ListGroup[]>("/api/v1/list-groups"),
+  createGroup: (body: { name: string }) =>
+    request<ListGroup>("/api/v1/list-groups", json("POST", body)),
+  updateGroup: (id: string, body: Partial<Pick<ListGroup, "name" | "sort_order" | "is_collapsed">>) =>
+    request<ListGroup>(`/api/v1/list-groups/${id}`, json("PATCH", body)),
+  deleteGroup: (id: string) => request<void>(`/api/v1/list-groups/${id}`, json("DELETE")),
 
   tasks: (params: {
     view?: TaskView;
