@@ -237,7 +237,17 @@
     padding: 0;
   }
 
-  /* 左上角触发按钮，与标题基线对齐 */
+  /* 左上角「更多」按钮贴左对齐，不受 content-gutter 影响 */
+  .mobile-shell .middle-header {
+    padding-left: 0;
+  }
+
+  .mobile-shell .middle-header .quick-add,
+  .mobile-shell .middle-header .search-field,
+  .mobile-shell .middle-header .inline-error {
+    margin-left: var(--content-gutter);
+  }
+
   .mobile-more-trigger {
     min-width: 44px;
     min-height: 44px;

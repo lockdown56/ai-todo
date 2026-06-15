@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DropPosition } from "@/lib/list-reorder";
 
 const DRAG_THRESHOLD_PX = 8;
+const SCROLL_CANCEL_THRESHOLD_PX = 10;
 
 export interface ListDragSource {
   type: "list";
@@ -29,7 +30,17 @@ interface PointerSession {
   startX: number;
   startY: number;
   moved: boolean;
+  pressActivated: boolean;
   target: HTMLElement;
+  longPressTimer: ReturnType<typeof setTimeout> | null;
+  detachListeners: () => void;
+}
+
+function clearLongPressTimer(session: PointerSession) {
+  if (session.longPressTimer) {
+    clearTimeout(session.longPressTimer);
+    session.longPressTimer = null;
+  }
 }
 
 function dropPositionFromY(clientY: number, element: Element): DropPosition {
@@ -47,12 +58,18 @@ export function usePointerListSort({
   canDropOnGroup,
   onReorderLists,
   onReorderTopLevel,
+  longPressMs,
 }: {
   canDropOnList: (source: SortDragSource, groupId: string | null, listId: string) => boolean;
   canDropOnGroup: (source: SortDragSource, groupId: string) => boolean;
   onReorderLists: (activeId: string, overId: string, position: DropPosition) => void;
   onReorderTopLevel: (activeId: string, overId: string, position: DropPosition) => void;
+  /** 长按多久后进入拖拽排序；未设置时移动超过阈值即开始拖拽（桌面端） */
+  longPressMs?: number;
 }) {
+  const longPressMsRef = useRef(longPressMs);
+  longPressMsRef.current = longPressMs;
+
   const sessionRef = useRef<PointerSession | null>(null);
   const suppressClickRef = useRef(false);
   const dropIndicatorRef = useRef<DropIndicator | null>(null);
@@ -65,6 +82,11 @@ export function usePointerListSort({
   }, []);
 
   const clearSession = useCallback(() => {
+    const session = sessionRef.current;
+    if (session) {
+      clearLongPressTimer(session);
+      session.detachListeners();
+    }
     sessionRef.current = null;
     setDraggingId(null);
     setIndicator(null);
@@ -126,16 +148,22 @@ export function usePointerListSort({
     [canDropOnGroup, canDropOnList, setIndicator],
   );
 
-  const processPointerMove = useCallback(
-    (event: PointerEvent) => {
-      const session = sessionRef.current;
-      if (!session || event.pointerId !== session.pointerId) return;
+  const activatePressDrag = useCallback((session: PointerSession) => {
+    session.pressActivated = true;
+    setDraggingId(session.source.id);
+    document.body.classList.add("is-list-sorting");
+    if (!session.target.hasPointerCapture(session.pointerId)) {
+      session.target.setPointerCapture(session.pointerId);
+    }
+  }, []);
 
-      const distance = Math.hypot(event.clientX - session.startX, event.clientY - session.startY);
+  const beginDrag = useCallback(
+    (session: PointerSession, event: PointerEvent) => {
       if (!session.moved) {
-        if (distance < DRAG_THRESHOLD_PX) return;
         session.moved = true;
-        session.target.setPointerCapture(event.pointerId);
+        if (!session.target.hasPointerCapture(event.pointerId)) {
+          session.target.setPointerCapture(event.pointerId);
+        }
         setDraggingId(session.source.id);
         document.body.classList.add("is-list-sorting");
       }
@@ -146,10 +174,48 @@ export function usePointerListSort({
     [updateIndicator],
   );
 
+  const cancelSessionForScroll = useCallback((session: PointerSession) => {
+    suppressClickRef.current = true;
+    clearLongPressTimer(session);
+    session.detachListeners();
+    sessionRef.current = null;
+  }, []);
+
+  const processPointerMove = useCallback(
+    (event: PointerEvent) => {
+      const session = sessionRef.current;
+      if (!session || event.pointerId !== session.pointerId) return;
+
+      const distance = Math.hypot(event.clientX - session.startX, event.clientY - session.startY);
+      const pressDelay = longPressMsRef.current;
+
+      if (pressDelay) {
+        if (!session.pressActivated) {
+          if (distance >= SCROLL_CANCEL_THRESHOLD_PX) {
+            cancelSessionForScroll(session);
+          }
+          return;
+        }
+
+        beginDrag(session, event);
+        return;
+      }
+
+      if (!session.moved) {
+        if (distance < DRAG_THRESHOLD_PX) return;
+      }
+
+      beginDrag(session, event);
+    },
+    [beginDrag, cancelSessionForScroll],
+  );
+
   const processPointerUp = useCallback(
     (event: PointerEvent) => {
       const session = sessionRef.current;
       if (!session || event.pointerId !== session.pointerId) return;
+
+      clearLongPressTimer(session);
 
       if (session.moved) {
         suppressClickRef.current = true;
@@ -157,20 +223,28 @@ export function usePointerListSort({
         if (indicator) {
           commitDrop(session.source, indicator);
         }
+      } else if (session.pressActivated) {
+        suppressClickRef.current = true;
       }
 
       if (session.target.hasPointerCapture(event.pointerId)) {
         session.target.releasePointerCapture(event.pointerId);
       }
-      clearSession();
+
+      session.detachListeners();
+      sessionRef.current = null;
+      setDraggingId(null);
+      setIndicator(null);
+      document.body.classList.remove("is-list-sorting");
     },
-    [clearSession, commitDrop],
+    [commitDrop, setIndicator],
   );
 
   const processPointerCancel = useCallback(
     (event: PointerEvent) => {
       const session = sessionRef.current;
       if (!session || event.pointerId !== session.pointerId) return;
+
       if (session.target.hasPointerCapture(event.pointerId)) {
         session.target.releasePointerCapture(event.pointerId);
       }
@@ -188,21 +262,21 @@ export function usePointerListSort({
       const onUp = (event: PointerEvent) => {
         if (event.pointerId !== pointerId) return;
         processPointerUp(event);
-        document.removeEventListener("pointermove", onMove);
-        document.removeEventListener("pointerup", onUp);
-        document.removeEventListener("pointercancel", onCancel);
       };
       const onCancel = (event: PointerEvent) => {
         if (event.pointerId !== pointerId) return;
         processPointerCancel(event);
-        document.removeEventListener("pointermove", onMove);
-        document.removeEventListener("pointerup", onUp);
-        document.removeEventListener("pointercancel", onCancel);
       };
 
       document.addEventListener("pointermove", onMove);
       document.addEventListener("pointerup", onUp);
       document.addEventListener("pointercancel", onCancel);
+
+      return () => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.removeEventListener("pointercancel", onCancel);
+      };
     },
     [processPointerCancel, processPointerMove, processPointerUp],
   );
@@ -210,17 +284,30 @@ export function usePointerListSort({
   const onSortPointerDown = useCallback(
     (event: React.PointerEvent, source: SortDragSource) => {
       if (event.button !== 0) return;
-      sessionRef.current = {
+
+      const detachListeners = attachDocumentListeners(event.pointerId);
+      const session: PointerSession = {
         source,
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
         moved: false,
+        pressActivated: false,
         target: event.currentTarget as HTMLElement,
+        longPressTimer: null,
+        detachListeners,
       };
-      attachDocumentListeners(event.pointerId);
+      sessionRef.current = session;
+
+      const pressDelay = longPressMsRef.current;
+      if (pressDelay) {
+        session.longPressTimer = setTimeout(() => {
+          if (sessionRef.current !== session) return;
+          activatePressDrag(session);
+        }, pressDelay);
+      }
     },
-    [attachDocumentListeners],
+    [activatePressDrag, attachDocumentListeners],
   );
 
   const onSortPointerMove = useCallback(
@@ -252,9 +339,9 @@ export function usePointerListSort({
 
   useEffect(
     () => () => {
-      document.body.classList.remove("is-list-sorting");
+      clearSession();
     },
-    [],
+    [clearSession],
   );
 
   return {

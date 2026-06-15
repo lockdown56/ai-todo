@@ -316,6 +316,7 @@ function MobileMoreDrawer({
     canDropOnGroup: () => false,
     onReorderLists: reorderLists,
     onReorderTopLevel: () => {},
+    longPressMs: 400,
   });
 
   const renderList = (list: TaskList, groupId: string | null) => {
