@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject, TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -15,6 +15,12 @@ import { ConnectionError } from "@/components/ConnectionError";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { viewNames } from "@/lib/constants";
 import { errorMessage } from "@/lib/error-utils";
+import { sortListsByOrder } from "@/lib/list-reorder";
+import { useListReorder } from "@/lib/use-list-reorder";
+import {
+  usePointerListSort,
+  type SortDragSource,
+} from "@/lib/use-pointer-list-sort";
 import { api } from "@/api";
 import { queryKeys } from "@/query";
 import type { ListGroup, TaskView, TaskList } from "@/types";
@@ -276,6 +282,10 @@ function MobileSubPage({
   );
 }
 
+function MobileDropLine() {
+  return <div className="mobile-sort-drop-line" aria-hidden="true" />;
+}
+
 function MobileMoreDrawer({
   lists,
   groups,
@@ -290,18 +300,61 @@ function MobileMoreDrawer({
   onClose: () => void;
 }) {
   const customLists = lists.filter((list) => !list.system_type);
-  const ungrouped = customLists.filter((list) => !list.group_id);
-  const renderList = (list: TaskList) => (
-    <Button
-      key={list.id}
-      variant="ghost"
-      className={`mobile-more-item ${currentPath === `/list/${list.id}` ? "active" : ""}`}
-      onClick={() => onNavigate(`/list/${list.id}`)}
-    >
-      <span className="list-dot" style={{ backgroundColor: list.color }} />
-      <span>{list.name}</span>
-    </Button>
+  const ungrouped = sortListsByOrder(customLists.filter((list) => !list.group_id));
+  const { reorderLists } = useListReorder(lists, groups);
+
+  const canDropOnList = useCallback(
+    (source: SortDragSource, groupId: string | null, listId: string) => {
+      if (source.type !== "list" || source.id === listId) return false;
+      return source.groupId === groupId;
+    },
+    [],
   );
+
+  const pointerSort = usePointerListSort({
+    canDropOnList,
+    canDropOnGroup: () => false,
+    onReorderLists: reorderLists,
+    onReorderTopLevel: () => {},
+  });
+
+  const renderList = (list: TaskList, groupId: string | null) => {
+    const showBefore =
+      pointerSort.dropIndicator?.targetId === list.id &&
+      pointerSort.dropIndicator.position === "before";
+    const showAfter =
+      pointerSort.dropIndicator?.targetId === list.id &&
+      pointerSort.dropIndicator.position === "after";
+    const dragging = pointerSort.draggingId === list.id;
+
+    return (
+      <div
+        key={list.id}
+        className="mobile-sort-slot"
+        data-sort-id={list.id}
+        data-sort-kind="list"
+        data-sort-group={groupId ?? ""}
+      >
+        {showBefore && <MobileDropLine />}
+        <Button
+          variant="ghost"
+          className={`mobile-more-item sortable-list-item ${currentPath === `/list/${list.id}` ? "active" : ""} ${dragging ? "is-list-dragging" : ""}`}
+          onPointerDown={(event) =>
+            pointerSort.onSortPointerDown(event, { type: "list", id: list.id, groupId })
+          }
+          onClick={() => {
+            if (pointerSort.consumeClick()) return;
+            onNavigate(`/list/${list.id}`);
+          }}
+        >
+          <span className="list-dot" style={{ backgroundColor: list.color }} />
+          <span>{list.name}</span>
+        </Button>
+        {showAfter && <MobileDropLine />}
+      </div>
+    );
+  };
+
   return (
     <>
       <button
@@ -336,15 +389,17 @@ function MobileMoreDrawer({
               <div className="mobile-more-divider" />
               <div className="mobile-more-section">
                 <span className="mobile-more-section-title">清单</span>
-                {ungrouped.map(renderList)}
+                {ungrouped.map((list) => renderList(list, null))}
               </div>
               {groups.map((group) => {
-                const groupLists = customLists.filter((list) => list.group_id === group.id);
+                const groupLists = sortListsByOrder(
+                  customLists.filter((list) => list.group_id === group.id),
+                );
                 if (groupLists.length === 0) return null;
                 return (
                   <div className="mobile-more-section" key={group.id}>
                     <span className="mobile-more-section-title">{group.name}</span>
-                    {groupLists.map(renderList)}
+                    {groupLists.map((list) => renderList(list, group.id))}
                   </div>
                 );
               })}

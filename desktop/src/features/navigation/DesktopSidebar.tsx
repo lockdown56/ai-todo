@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -28,11 +28,11 @@ import {
   UserRound,
 } from "lucide-react";
 import { viewNames, viewIcons } from "@/lib/constants";
+import { getTopLevelEntries, sortListsByOrder, type DropPosition } from "@/lib/list-reorder";
 import {
-  getTopLevelEntries,
-  sortListsByOrder,
-  type DropPosition,
-} from "@/lib/list-reorder";
+  usePointerListSort,
+  type SortDragSource,
+} from "@/lib/use-pointer-list-sort";
 import type { ListGroup, TaskList, TaskView } from "@/types";
 
 interface Scope {
@@ -40,34 +40,11 @@ interface Scope {
   listId?: string;
 }
 
-interface ListDragState {
-  type: "list";
-  id: string;
-  groupId: string | null;
-}
-
-interface GroupDragState {
-  type: "group";
-  id: string;
-}
-
-type SidebarDragState = ListDragState | GroupDragState;
-
-interface DropIndicator {
-  targetId: string;
-  position: DropPosition;
-}
-
-function dropPositionFromEvent(event: React.DragEvent, element: Element): DropPosition {
-  const rect = element.getBoundingClientRect();
-  return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
-}
-
 function DropLine() {
   return <div className="sidebar-drop-line" aria-hidden="true" />;
 }
 
-interface ListActions {
+interface SortActions {
   scope: Scope;
   groups: ListGroup[];
   onNavigate: (path: string) => void;
@@ -76,14 +53,10 @@ interface ListActions {
   onDelete: (list: TaskList) => void;
   onArchive: (list: TaskList) => void;
   onMoveToGroup: (list: TaskList, groupId: string | null) => void;
-  onReorderLists: (activeId: string, overId: string, position: DropPosition) => void;
-  onReorderTopLevel: (activeId: string, overId: string, position: DropPosition) => void;
-  canDropOnList: (groupId: string | null, listId: string) => boolean;
-  onListDragStart: (list: TaskList, groupId: string | null) => void;
-  onDragEnd: () => void;
-  getDragState: () => SidebarDragState | null;
-  dropIndicator: DropIndicator | null;
-  setDropIndicator: (indicator: DropIndicator | null) => void;
+  dropIndicator: ReturnType<typeof usePointerListSort>["dropIndicator"];
+  draggingId: string | null;
+  onSortPointerDown: ReturnType<typeof usePointerListSort>["onSortPointerDown"];
+  consumeClick: ReturnType<typeof usePointerListSort>["consumeClick"];
 }
 
 function ListRow({
@@ -93,151 +66,113 @@ function ListRow({
   collapsed = false,
 }: {
   list: TaskList;
-  actions: ListActions;
+  actions: SortActions;
   groupId: string | null;
   collapsed?: boolean;
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
   const showBefore =
     actions.dropIndicator?.targetId === list.id && actions.dropIndicator.position === "before";
   const showAfter =
     actions.dropIndicator?.targetId === list.id && actions.dropIndicator.position === "after";
+  const dragging = actions.draggingId === list.id;
+  const sortSource: SortDragSource = { type: "list", id: list.id, groupId };
 
-  const handleDragStart = (event: React.DragEvent) => {
-    actions.onListDragStart(list, groupId);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", list.id);
-    wrapRef.current?.classList.add("is-list-dragging");
-  };
-
-  const handleDragEnd = () => {
-    actions.onDragEnd();
-    wrapRef.current?.classList.remove("is-list-dragging");
-  };
-
-  const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    const position = dropPositionFromEvent(event, event.currentTarget);
-    const source = actions.getDragState();
-    actions.setDropIndicator(null);
-    if (!source || !actions.canDropOnList(groupId, list.id)) {
-      actions.onDragEnd();
-      return;
-    }
-    if (groupId !== null) {
-      actions.onReorderLists(source.id, list.id, position);
-    } else if (source.type === "list" && source.groupId === null) {
-      actions.onReorderLists(source.id, list.id, position);
-    } else {
-      actions.onReorderTopLevel(source.id, list.id, position);
-    }
-    actions.onDragEnd();
-  };
+  const listButton = (
+    <Button
+      variant="ghost"
+      className={
+        collapsed
+          ? `nav-item sortable-list-item ${actions.scope.listId === list.id ? "active" : ""} ${dragging ? "is-list-dragging" : ""}`
+          : `nav-item sortable-list-item w-full justify-start ${actions.scope.listId === list.id ? "active" : ""} ${dragging ? "is-list-dragging" : ""}`
+      }
+      onPointerDown={(event) => actions.onSortPointerDown(event, sortSource)}
+      onClick={() => {
+        if (actions.consumeClick()) return;
+        void actions.onNavigate(`/list/${list.id}`);
+      }}
+      title={collapsed ? undefined : list.name}
+      aria-label={collapsed ? `${list.name}，${list.task_count} 个任务` : undefined}
+    >
+      {collapsed ? (
+        <span
+          className="collapsed-list-mark"
+          style={{ "--list-color": list.color } as React.CSSProperties}
+          aria-hidden="true"
+        >
+          {Array.from(list.name.trim())[0]?.toUpperCase() || "·"}
+        </span>
+      ) : (
+        <>
+          <span className="nav-icon-slot">
+            <span className="list-dot" style={{ backgroundColor: list.color }} />
+          </span>
+          <span className="nav-label">{list.name}</span>
+          <span className="nav-count">{list.task_count}</span>
+        </>
+      )}
+    </Button>
+  );
 
   return (
-    <div className="sidebar-sort-slot">
+    <div
+      className="sidebar-sort-slot"
+      data-sort-id={list.id}
+      data-sort-kind="list"
+      data-sort-group={groupId ?? ""}
+    >
       {showBefore && <DropLine />}
-      <div
-        ref={wrapRef}
-        className="custom-list-wrap"
-        onDragOver={(event) => {
-          if (!actions.canDropOnList(groupId, list.id)) {
-            actions.setDropIndicator(null);
-            return;
-          }
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-          actions.setDropIndicator({
-            targetId: list.id,
-            position: dropPositionFromEvent(event, event.currentTarget),
-          });
-        }}
-        onDrop={handleDrop}
-      >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            className={
-              collapsed
-                ? `nav-item ${actions.scope.listId === list.id ? "active" : ""}`
-                : `nav-item w-full justify-start ${actions.scope.listId === list.id ? "active" : ""}`
-            }
-            draggable
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onClick={() => void actions.onNavigate(`/list/${list.id}`)}
-            title={collapsed ? undefined : list.name}
-            aria-label={collapsed ? `${list.name}，${list.task_count} 个任务` : undefined}
-          >
-            {collapsed ? (
-              <span
-                className="collapsed-list-mark"
-                style={{ "--list-color": list.color } as React.CSSProperties}
-                aria-hidden="true"
-              >
-                {Array.from(list.name.trim())[0]?.toUpperCase() || "·"}
-              </span>
-            ) : (
-              <>
-                <span className="nav-icon-slot">
-                  <span className="list-dot" style={{ backgroundColor: list.color }} />
-                </span>
-                <span className="nav-label">{list.name}</span>
-                <span className="nav-count">{list.task_count}</span>
-              </>
-            )}
-          </Button>
-        </TooltipTrigger>
-        {collapsed && (
-          <TooltipContent side="right" align="center" className="list-tooltip">
-            <strong>{list.name}</strong>
-            <span>{list.task_count} 个任务</span>
-          </TooltipContent>
+      <div className={`custom-list-wrap ${dragging ? "is-list-dragging" : ""}`}>
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>{listButton}</TooltipTrigger>
+            <TooltipContent side="right" align="center" className="list-tooltip">
+              <strong>{list.name}</strong>
+              <span>{list.task_count} 个任务</span>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          listButton
         )}
-      </Tooltip>
-      {!collapsed && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="icon-button list-menu-button"
-              aria-label={`管理清单 ${list.name}`}
-              draggable={false}
-              onDragStart={(event) => event.stopPropagation()}
-            >
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" aria-label={`清单 ${list.name} 操作`}>
-            <DropdownMenuItem onSelect={() => actions.onEdit(list)}>重命名</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => actions.onColor(list)}>更改颜色</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>移动到分组</DropdownMenuLabel>
-            {list.group_id && (
-              <DropdownMenuItem onSelect={() => actions.onMoveToGroup(list, null)}>
-                无分组
-              </DropdownMenuItem>
-            )}
-            {actions.groups
-              .filter((group) => group.id !== list.group_id)
-              .map((group) => (
-                <DropdownMenuItem
-                  key={group.id}
-                  onSelect={() => actions.onMoveToGroup(list, group.id)}
-                >
-                  {group.name}
+        {!collapsed && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="icon-button list-menu-button"
+                aria-label={`管理清单 ${list.name}`}
+              >
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" aria-label={`清单 ${list.name} 操作`}>
+              <DropdownMenuItem onSelect={() => actions.onEdit(list)}>重命名</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => actions.onColor(list)}>更改颜色</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>移动到分组</DropdownMenuLabel>
+              {list.group_id && (
+                <DropdownMenuItem onSelect={() => actions.onMoveToGroup(list, null)}>
+                  无分组
                 </DropdownMenuItem>
-              ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => actions.onArchive(list)}>归档</DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onSelect={() => actions.onDelete(list)}>
-              删除
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+              )}
+              {actions.groups
+                .filter((group) => group.id !== list.group_id)
+                .map((group) => (
+                  <DropdownMenuItem
+                    key={group.id}
+                    onSelect={() => actions.onMoveToGroup(list, group.id)}
+                  >
+                    {group.name}
+                  </DropdownMenuItem>
+                ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => actions.onArchive(list)}>归档</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => actions.onDelete(list)}>
+                删除
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
       {showAfter && <DropLine />}
     </div>
@@ -247,119 +182,77 @@ function ListRow({
 function GroupHeaderRow({
   group,
   groupLists,
-  canDropOnHeader,
-  onGroupDragStart,
-  onDragEnd,
-  onReorderTopLevel,
+  sortActions,
   onToggleGroupCollapse,
   onAddListToGroup,
   onRenameGroup,
   onDeleteGroup,
-  dropIndicator,
-  setDropIndicator,
 }: {
   group: ListGroup;
   groupLists: TaskList[];
-  canDropOnHeader: (groupId: string) => boolean;
-  onGroupDragStart: (group: ListGroup) => void;
-  onDragEnd: () => void;
-  onReorderTopLevel: (activeId: string, overId: string, position: DropPosition) => void;
+  sortActions: SortActions;
   onToggleGroupCollapse: (group: ListGroup) => void;
   onAddListToGroup: (groupId: string) => void;
   onRenameGroup: (group: ListGroup) => void;
   onDeleteGroup: (group: ListGroup) => void;
-  dropIndicator: DropIndicator | null;
-  setDropIndicator: (indicator: DropIndicator | null) => void;
 }) {
-  const headerRef = useRef<HTMLDivElement>(null);
   const showBefore =
-    dropIndicator?.targetId === group.id && dropIndicator.position === "before";
+    sortActions.dropIndicator?.targetId === group.id &&
+    sortActions.dropIndicator.position === "before";
   const showAfter =
-    dropIndicator?.targetId === group.id && dropIndicator.position === "after";
-
-  const handleDragStart = (event: React.DragEvent) => {
-    onGroupDragStart(group);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", group.id);
-    headerRef.current?.classList.add("is-list-dragging");
-  };
-
-  const handleDragEnd = () => {
-    onDragEnd();
-    headerRef.current?.classList.remove("is-list-dragging");
-  };
+    sortActions.dropIndicator?.targetId === group.id &&
+    sortActions.dropIndicator.position === "after";
+  const dragging = sortActions.draggingId === group.id;
+  const sortSource: SortDragSource = { type: "group", id: group.id };
 
   return (
-    <div className="sidebar-sort-slot">
+    <div
+      className="sidebar-sort-slot"
+      data-sort-id={group.id}
+      data-sort-kind="group"
+      data-sort-group=""
+    >
       {showBefore && <DropLine />}
-      <div
-        ref={headerRef}
-        className="list-group-header"
-        onDragOver={(event) => {
-          if (!canDropOnHeader(group.id)) {
-            setDropIndicator(null);
-            return;
-          }
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-          setDropIndicator({
-            targetId: group.id,
-            position: dropPositionFromEvent(event, event.currentTarget),
-          });
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          const position = dropPositionFromEvent(event, event.currentTarget);
-          setDropIndicator(null);
-          if (canDropOnHeader(group.id)) {
-            const activeId = event.dataTransfer.getData("text/plain");
-            if (activeId && activeId !== group.id) {
-              onReorderTopLevel(activeId, group.id, position);
-            }
-          }
-          onDragEnd();
-        }}
-      >
-      <Button
-        variant="ghost"
-        className="list-group-toggle !h-[42px] !min-h-[42px] !px-[11px] !pr-[46px] gap-[11px]"
-        draggable
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onClick={() => onToggleGroupCollapse(group)}
-        aria-expanded={!group.is_collapsed}
-        aria-label={`${group.is_collapsed ? "展开" : "折叠"}分组 ${group.name}`}
-      >
-        {group.is_collapsed ? <ChevronRight /> : <ChevronDown />}
-        <span className="nav-label">{group.name}</span>
-        <span className="nav-count">{groupLists.length}</span>
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="icon-button list-menu-button"
-            aria-label={`管理分组 ${group.name}`}
-            draggable={false}
-            onDragStart={(event) => event.stopPropagation()}
-          >
-            <MoreHorizontal />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" aria-label={`分组 ${group.name} 操作`}>
-          <DropdownMenuItem onSelect={() => onAddListToGroup(group.id)}>
-            新建清单
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onRenameGroup(group)}>
-            重命名
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => onDeleteGroup(group)}>
-            删除分组
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className={`list-group-header ${dragging ? "is-list-dragging" : ""}`}>
+        <Button
+          variant="ghost"
+          className={`list-group-toggle sortable-list-item !h-[42px] !min-h-[42px] !px-[11px] !pr-[46px] gap-[11px] ${dragging ? "is-list-dragging" : ""}`}
+          onPointerDown={(event) => sortActions.onSortPointerDown(event, sortSource)}
+          onClick={() => {
+            if (sortActions.consumeClick()) return;
+            onToggleGroupCollapse(group);
+          }}
+          aria-expanded={!group.is_collapsed}
+          aria-label={`${group.is_collapsed ? "展开" : "折叠"}分组 ${group.name}`}
+        >
+          {group.is_collapsed ? <ChevronRight /> : <ChevronDown />}
+          <span className="nav-label">{group.name}</span>
+          <span className="nav-count">{groupLists.length}</span>
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="icon-button list-menu-button"
+              aria-label={`管理分组 ${group.name}`}
+            >
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" aria-label={`分组 ${group.name} 操作`}>
+            <DropdownMenuItem onSelect={() => onAddListToGroup(group.id)}>
+              新建清单
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onRenameGroup(group)}>
+              重命名
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => onDeleteGroup(group)}>
+              删除分组
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {showAfter && <DropLine />}
     </div>
@@ -417,42 +310,35 @@ export function DesktopSidebar({
   onToggleArchived: () => void;
   onUnarchive: (list: TaskList) => void;
 }) {
-  const dragRef = useRef<SidebarDragState | null>(null);
-  const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
   const customLists = lists.filter((item) => !item.system_type);
   const topLevelEntries = getTopLevelEntries(customLists, groups);
 
-  const handleListDragStart = (list: TaskList, groupId: string | null) => {
-    dragRef.current = { type: "list", id: list.id, groupId };
-  };
+  const canDropOnList = useCallback(
+    (source: SortDragSource, groupId: string | null, listId: string) => {
+      if (source.id === listId) return false;
+      if (groupId !== null) {
+        return source.type === "list" && source.groupId === groupId;
+      }
+      if (source.type === "group") return true;
+      return source.type === "list" && source.groupId === null;
+    },
+    [],
+  );
 
-  const handleGroupDragStart = (group: ListGroup) => {
-    dragRef.current = { type: "group", id: group.id };
-  };
-
-  const handleDragEnd = () => {
-    dragRef.current = null;
-    setDropIndicator(null);
-  };
-
-  const canDropOnList = (groupId: string | null, listId: string) => {
-    const source = dragRef.current;
-    if (!source || source.id === listId) return false;
-    if (groupId !== null) {
-      return source.type === "list" && source.groupId === groupId;
-    }
+  const canDropOnGroup = useCallback((source: SortDragSource, groupId: string) => {
+    if (source.id === groupId) return false;
     if (source.type === "group") return true;
     return source.type === "list" && source.groupId === null;
-  };
+  }, []);
 
-  const canDropOnHeader = (groupId: string) => {
-    const source = dragRef.current;
-    if (!source || source.id === groupId) return false;
-    if (source.type === "group") return true;
-    return source.type === "list" && source.groupId === null;
-  };
+  const pointerSort = usePointerListSort({
+    canDropOnList,
+    canDropOnGroup,
+    onReorderLists,
+    onReorderTopLevel,
+  });
 
-  const actions: ListActions = {
+  const sortActions: SortActions = {
     scope,
     groups,
     onNavigate,
@@ -461,14 +347,7 @@ export function DesktopSidebar({
     onDelete,
     onArchive,
     onMoveToGroup,
-    onReorderLists,
-    onReorderTopLevel,
-    canDropOnList,
-    onListDragStart: handleListDragStart,
-    onDragEnd: handleDragEnd,
-    getDragState: () => dragRef.current,
-    dropIndicator,
-    setDropIndicator,
+    ...pointerSort,
   };
 
   return (
@@ -536,25 +415,19 @@ export function DesktopSidebar({
       )}
       <TooltipProvider delayDuration={80} skipDelayDuration={100}>
         {collapsed ? (
-          <div
-            className="sidebar-lists-scroll nav-section custom-lists"
-            onDragLeave={() => setDropIndicator(null)}
-          >
+          <div className="sidebar-lists-scroll nav-section custom-lists">
             {sortListsByOrder(customLists).map((list) => (
               <ListRow
                 key={list.id}
                 list={list}
-                actions={actions}
+                actions={sortActions}
                 groupId={list.group_id}
                 collapsed
               />
             ))}
           </div>
         ) : (
-          <div
-            className="sidebar-lists-scroll lists-scroll"
-            onDragLeave={() => setDropIndicator(null)}
-          >
+          <div className="sidebar-lists-scroll lists-scroll">
             <div className="nav-section custom-lists">
               {topLevelEntries.map((entry) => {
                 if (entry.kind === "list") {
@@ -562,7 +435,7 @@ export function DesktopSidebar({
                     <ListRow
                       key={entry.item.id}
                       list={entry.item}
-                      actions={actions}
+                      actions={sortActions}
                       groupId={null}
                     />
                   );
@@ -577,16 +450,11 @@ export function DesktopSidebar({
                     <GroupHeaderRow
                       group={group}
                       groupLists={groupLists}
-                      canDropOnHeader={canDropOnHeader}
-                      onGroupDragStart={handleGroupDragStart}
-                      onDragEnd={handleDragEnd}
-                      onReorderTopLevel={onReorderTopLevel}
+                      sortActions={sortActions}
                       onToggleGroupCollapse={onToggleGroupCollapse}
                       onAddListToGroup={onAddListToGroup}
                       onRenameGroup={onRenameGroup}
                       onDeleteGroup={onDeleteGroup}
-                      dropIndicator={dropIndicator}
-                      setDropIndicator={setDropIndicator}
                     />
                     {!group.is_collapsed && (
                       <div className="nav-section group-lists">
@@ -594,7 +462,7 @@ export function DesktopSidebar({
                           <ListRow
                             key={list.id}
                             list={list}
-                            actions={actions}
+                            actions={sortActions}
                             groupId={group.id}
                           />
                         ))}

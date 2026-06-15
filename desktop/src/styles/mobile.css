@@ -336,6 +336,33 @@
     color: var(--primary);
   }
 
+  .mobile-sort-slot {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mobile-sort-drop-line {
+    height: 2px;
+    margin: 2px 12px;
+    border-radius: 1px;
+    background: var(--primary);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 28%, transparent);
+    pointer-events: none;
+  }
+
+  .mobile-more-item.sortable-list-item {
+    cursor: grab;
+  }
+
+  .mobile-more-item.sortable-list-item.is-list-dragging {
+    cursor: grabbing;
+    opacity: 0.45;
+  }
+
+  body.is-list-sorting .mobile-more-item.sortable-list-item {
+    touch-action: none;
+  }
+
   .mobile-more-divider {
     height: 1px;
     margin: 8px 20px;

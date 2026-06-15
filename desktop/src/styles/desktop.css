@@ -284,14 +284,23 @@
   max-width: 100%;
 }
 
-.custom-list-wrap .nav-item[draggable="true"],
-.list-group-toggle[draggable="true"] {
+.sortable-list-item {
   cursor: grab;
 }
 
 .custom-list-wrap.is-list-dragging .nav-item,
-.list-group-header.is-list-dragging .list-group-toggle {
+.list-group-header.is-list-dragging .list-group-toggle,
+.sortable-list-item.is-list-dragging {
   cursor: grabbing;
+  opacity: 0.45;
+}
+
+body.is-list-sorting {
+  user-select: none;
+}
+
+body.is-list-sorting .sortable-list-item {
+  touch-action: none;
 }
 
 .app-shell:not(.sidebar-collapsed) .custom-lists .nav-item,
