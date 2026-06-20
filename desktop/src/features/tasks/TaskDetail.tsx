@@ -40,6 +40,53 @@ interface EditorHandle {
   flush: () => Promise<boolean>;
 }
 
+function hasPatchValues(patch: TaskPatch) {
+  return Object.keys(patch).length > 0;
+}
+
+function mergeInFlightPatches(inFlight: Map<number, TaskPatch>, afterRequestId: number) {
+  let merged: TaskPatch = {};
+  for (const [requestId, patch] of inFlight) {
+    if (requestId > afterRequestId) merged = { ...merged, ...patch };
+  }
+  return merged;
+}
+
+function applyLocalPatch(base: Task, current: Task | null | undefined, patch: TaskPatch): Task {
+  let next = { ...base };
+  for (const [key, value] of Object.entries(patch) as [keyof TaskPatch, TaskPatch[keyof TaskPatch]][]) {
+    if (key === "tag_ids") {
+      if (current) next.tags = current.tags;
+      continue;
+    }
+    next = { ...next, [key]: value } as Task;
+  }
+  return next;
+}
+
+function removeSupersededPatchValues(
+  patch: TaskPatch,
+  pending: TaskPatch,
+  inFlight: Map<number, TaskPatch>,
+  requestId: number,
+) {
+  let retryPatch: TaskPatch = {};
+  for (const [key, value] of Object.entries(patch) as [keyof TaskPatch, TaskPatch[keyof TaskPatch]][]) {
+    const hasPendingValue = Object.prototype.hasOwnProperty.call(pending, key);
+    let hasNewerInFlightValue = false;
+    for (const [otherRequestId, otherPatch] of inFlight) {
+      if (otherRequestId > requestId && Object.prototype.hasOwnProperty.call(otherPatch, key)) {
+        hasNewerInFlightValue = true;
+        break;
+      }
+    }
+    if (!hasPendingValue && !hasNewerInFlightValue) {
+      retryPatch = { ...retryPatch, [key]: value };
+    }
+  }
+  return retryPatch;
+}
+
 export const TaskDetail = forwardRef<EditorHandle, {
   taskId: string;
   lists: TaskList[];
@@ -58,54 +105,100 @@ export const TaskDetail = forwardRef<EditorHandle, {
   const [saveError, setSaveError] = useState("");
   const [tagMenu, setTagMenu] = useState(false);
   const pendingRef = useRef<TaskPatch>({});
+  const inFlightRef = useRef(new Map<number, TaskPatch>());
+  const saveRequestRef = useRef(0);
+  const lastAppliedSaveRef = useRef(0);
   const timerRef = useRef<number | undefined>(undefined);
   const taskIdRef = useRef(taskId);
   const loadedTaskIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     taskIdRef.current = taskId;
-    if (taskQuery.data) {
-      const isNewTask = loadedTaskIdRef.current !== taskId;
+    if (!taskQuery.data) return;
+
+    const isNewTask = loadedTaskIdRef.current !== taskId;
+    if (isNewTask) {
       loadedTaskIdRef.current = taskId;
       setDraft(taskQuery.data);
       pendingRef.current = {};
-      if (isNewTask) setSaveState("idle");
+      inFlightRef.current.clear();
+      lastAppliedSaveRef.current = 0;
+      setSaveError("");
+      setSaveState("idle");
+      return;
     }
+
+    if (hasPatchValues(pendingRef.current) || inFlightRef.current.size > 0) return;
+    setDraft(taskQuery.data);
   }, [taskId, taskQuery.data]);
 
   const savePending = useCallback(async (): Promise<boolean> => {
     window.clearTimeout(timerRef.current);
     const patch = pendingRef.current;
-    if (!Object.keys(patch).length) return true;
+    if (!hasPatchValues(patch)) return true;
     pendingRef.current = {};
     const savingTaskId = taskIdRef.current;
+    const requestId = saveRequestRef.current + 1;
+    saveRequestRef.current = requestId;
+    inFlightRef.current.set(requestId, patch);
     setSaveState("saving");
     try {
       const saved = await api.updateTask(savingTaskId, patch);
+      inFlightRef.current.delete(requestId);
       if (taskIdRef.current === savingTaskId) {
-        setDraft(saved);
-        queryClient.setQueryData(queryKeys.task(saved.id), saved);
-        setSaveState("saved");
-        onDataChanged();
+        if (requestId >= lastAppliedSaveRef.current) {
+          lastAppliedSaveRef.current = requestId;
+          const localPatch = {
+            ...mergeInFlightPatches(inFlightRef.current, requestId),
+            ...pendingRef.current,
+          };
+          setDraft((current) => {
+            const next = applyLocalPatch(saved, current, localPatch);
+            queryClient.setQueryData(queryKeys.task(saved.id), next);
+            updateTaskListCache(queryClient, saved.id, next);
+            return next;
+          });
+        }
+        setSaveState(
+          inFlightRef.current.size > 0 ? "saving" : hasPatchValues(pendingRef.current) ? "dirty" : "saved",
+        );
       }
       return true;
     } catch (error) {
-      pendingRef.current = { ...patch, ...pendingRef.current };
+      inFlightRef.current.delete(requestId);
+      const retryPatch = removeSupersededPatchValues(
+        patch,
+        pendingRef.current,
+        inFlightRef.current,
+        requestId,
+      );
+      pendingRef.current = { ...retryPatch, ...pendingRef.current };
       if (taskIdRef.current === savingTaskId) {
         setSaveError(errorMessage(error));
         setSaveState("error");
       }
       return false;
     }
-  }, [onDataChanged, queryClient]);
+  }, [queryClient]);
 
   useImperativeHandle(ref, () => ({ flush: savePending }), [savePending]);
 
-  const schedule = <K extends keyof TaskPatch>(key: K, value: TaskPatch[K]) => {
-    setDraft((current) => current ? { ...current, [key]: value } as Task : current);
+  const schedule = <K extends keyof TaskPatch>(
+    key: K,
+    value: TaskPatch[K],
+    options: { updateDraft?: boolean } = {},
+  ) => {
+    if (options.updateDraft !== false) {
+      setDraft((current) => current ? { ...current, [key]: value } as Task : current);
+    }
     if (key === "priority") {
       updateTaskListCache(queryClient, taskIdRef.current, {
         priority: value as Task["priority"],
+      });
+    }
+    if (key === "title") {
+      updateTaskListCache(queryClient, taskIdRef.current, {
+        title: value as Task["title"],
       });
     }
     pendingRef.current = { ...pendingRef.current, [key]: value };
@@ -268,10 +361,11 @@ export const TaskDetail = forwardRef<EditorHandle, {
       </div>
       <Label className="detail-block">
         <span className="field-label">描述</span>
-        <Textarea
+        <DescriptionEditor
+          taskId={draft.id}
           value={draft.description}
           disabled={readOnly}
-          onChange={(event) => schedule("description", event.target.value)}
+          onChange={(value) => schedule("description", value, { updateDraft: false })}
           placeholder="添加描述..."
           aria-label="任务描述"
         />
@@ -293,6 +387,41 @@ export const TaskDetail = forwardRef<EditorHandle, {
     </div>
   );
 });
+
+function DescriptionEditor({
+  taskId,
+  value,
+  disabled,
+  onChange,
+  placeholder,
+  "aria-label": ariaLabel,
+}: {
+  taskId: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  placeholder: string;
+  "aria-label": string;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [taskId, value]);
+
+  return (
+    <Textarea
+      value={localValue}
+      disabled={disabled}
+      onChange={(event) => {
+        setLocalValue(event.target.value);
+        onChange(event.target.value);
+      }}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+    />
+  );
+}
 
 function DetailField({ label, icon, children }: { label: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (

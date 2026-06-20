@@ -620,6 +620,65 @@ describe("AI 清单 app", () => {
     expect(screen.getByText("已保存")).toBeInTheDocument();
   });
 
+  it("keeps newer detail edits when an older autosave response returns", async () => {
+    let resolveFirstSave: (() => void) | undefined;
+    const patches: unknown[] = [];
+    server.use(
+      http.patch(
+        "http://127.0.0.1:8000/api/v1/tasks/:taskId",
+        async ({ request }) => {
+          const patch = (await request.json()) as object;
+          patches.push(patch);
+          if (patches.length === 1) {
+            await new Promise<void>((resolve) => {
+              resolveFirstSave = resolve;
+            });
+          }
+          return HttpResponse.json(makeTask({ ...patch }));
+        },
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
+
+    const description = await screen.findByRole("textbox", { name: "任务描述" });
+    await user.type(description, "第一段");
+    await waitFor(() => expect(patches).toContainEqual({ description: "第一段" }));
+
+    await user.type(description, "继续输入");
+    expect(description).toHaveValue("第一段继续输入");
+
+    act(() => resolveFirstSave?.());
+
+    await waitFor(() => expect(description).toHaveValue("第一段继续输入"));
+  });
+
+  it("does not refetch stale task detail after autosave", async () => {
+    let detailRequests = 0;
+    server.use(
+      http.get("http://127.0.0.1:8000/api/v1/tasks/:taskId", () => {
+        detailRequests += 1;
+        return HttpResponse.json(makeTask({ description: "" }));
+      }),
+      http.patch(
+        "http://127.0.0.1:8000/api/v1/tasks/:taskId",
+        async ({ request }) => {
+          const patch = (await request.json()) as object;
+          return HttpResponse.json(makeTask({ ...patch }));
+        },
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
+
+    const description = await screen.findByRole("textbox", { name: "任务描述" });
+    await user.type(description, "保存后的内容");
+
+    expect(await screen.findByText("已保存")).toBeInTheDocument();
+    expect(description).toHaveValue("保存后的内容");
+    expect(detailRequests).toBe(1);
+  });
+
   it("keeps edits after an autosave failure and retries", async () => {
     let attempts = 0;
     server.use(
