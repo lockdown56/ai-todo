@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -111,6 +111,15 @@ export const TaskDetail = forwardRef<EditorHandle, {
   const timerRef = useRef<number | undefined>(undefined);
   const taskIdRef = useRef(taskId);
   const loadedTaskIdRef = useRef<string | undefined>(undefined);
+  const titleInputRef = useRef<HTMLTextAreaElement>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+
+  const resizeTitleInput = useCallback(() => {
+    const input = titleInputRef.current;
+    if (!input) return;
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight}px`;
+  }, []);
 
   useEffect(() => {
     taskIdRef.current = taskId;
@@ -120,6 +129,7 @@ export const TaskDetail = forwardRef<EditorHandle, {
     if (isNewTask) {
       loadedTaskIdRef.current = taskId;
       setDraft(taskQuery.data);
+      setEditingTitle(false);
       pendingRef.current = {};
       inFlightRef.current.clear();
       lastAppliedSaveRef.current = 0;
@@ -208,6 +218,27 @@ export const TaskDetail = forwardRef<EditorHandle, {
   };
 
   useEffect(() => () => window.clearTimeout(timerRef.current), []);
+  useLayoutEffect(() => {
+    if (!editingTitle) return;
+    resizeTitleInput();
+    const frame = window.requestAnimationFrame(resizeTitleInput);
+    return () => window.cancelAnimationFrame(frame);
+  }, [draft?.title, editingTitle, resizeTitleInput]);
+  useEffect(() => {
+    const input = titleInputRef.current;
+    if (!input || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(resizeTitleInput);
+    observer.observe(input);
+    return () => observer.disconnect();
+  }, [editingTitle, resizeTitleInput]);
+  useEffect(() => {
+    if (!editingTitle) return;
+    const input = titleInputRef.current;
+    if (!input) return;
+    input.focus();
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  }, [editingTitle]);
 
   const refreshDetail = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) });
@@ -237,13 +268,42 @@ export const TaskDetail = forwardRef<EditorHandle, {
           <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => void onClose()} aria-label="关闭任务详情"><X /></Button>
         </div>
       )}
-      <Input
-        className="detail-title-input"
-        value={draft.title}
-        disabled={readOnly}
-        onChange={(event) => schedule("title", event.target.value)}
-        aria-label="任务标题"
-      />
+      {!editingTitle ? (
+        <button
+          type="button"
+          className="detail-title-display"
+          aria-label={readOnly ? "任务标题" : "编辑任务标题"}
+          disabled={readOnly}
+          style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", overflowWrap: "anywhere" }}
+          onClick={() => {
+            if (!readOnly) setEditingTitle(true);
+          }}
+          onKeyDown={(event) => {
+            if (readOnly || (event.key !== "Enter" && event.key !== " ")) return;
+            event.preventDefault();
+            setEditingTitle(true);
+          }}
+        >
+          {draft.title || "未命名任务"}
+        </button>
+      ) : (
+        <Textarea
+          ref={titleInputRef}
+          className="detail-title-input"
+          value={draft.title}
+          rows={1}
+          wrap="soft"
+          disabled={readOnly}
+          onBlur={() => {
+            setEditingTitle(false);
+          }}
+          onChange={(event) => {
+            schedule("title", event.target.value);
+            window.requestAnimationFrame(resizeTitleInput);
+          }}
+          aria-label="任务标题"
+        />
+      )}
       <div className="detail-properties">
         <DetailField label="截止日期" icon={<CalendarDays />}>
           <div className="date-row">

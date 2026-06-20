@@ -325,16 +325,31 @@ body {
   font-size: 14px;
 }
 
-.detail-title-input {
-  width: 100%; border: 1px solid transparent;
+.detail-title-input,
+.detail-title-display {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: 45px;
+  border: 1px solid transparent;
   background: var(--color-input-bg);
   border-radius: var(--radius-md);
   padding: 10px 14px; font-size: 16px; font-weight: 600;
   font-family: inherit; color: var(--color-text);
+  line-height: 1.5;
+  text-align: left;
   outline: none;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
   transition: border var(--transition-fast), background var(--transition-fast);
 }
-.detail-title-input:focus { border-color: var(--color-primary); background: var(--color-surface); }
+.detail-title-input {
+  overflow: hidden;
+  resize: none;
+}
+.detail-title-input:focus,
+.detail-title-display:focus { border-color: var(--color-primary); background: var(--color-surface); }
 
 .field-group { display: flex; flex-direction: column; gap: 5px; }
 .field-label {
@@ -852,7 +867,7 @@ function renderDetail() {
   const reminderDisplay = task.reminderAt ? formatDateTime(task.reminderAt) : '无';
 
   content.innerHTML = `
-    <input class="detail-title-input" value="${escHtml(task.title)}" onchange="updateTaskField('${task.id}','title',this.value)" aria-label="任务标题">
+    <button type="button" class="detail-title-display" style="white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere" onclick="editDetailTitle('${task.id}')" aria-label="编辑任务标题">${escHtml(task.title || '未命名任务')}</button>
 
     <div class="field-group">
       <span class="field-label">截止日期</span>
@@ -928,6 +943,30 @@ function renderDetail() {
       `}
     </div>
   `;
+}
+
+function autoResizeTitle(input) {
+  if (!input) return;
+  input.style.height = 'auto';
+  input.style.height = `${input.scrollHeight}px`;
+}
+
+function editDetailTitle(taskId) {
+  const task = getTask(taskId);
+  const display = document.querySelector('.detail-title-display');
+  if (!task || !display) return;
+  const input = document.createElement('textarea');
+  input.className = 'detail-title-input';
+  input.rows = 1;
+  input.wrap = 'soft';
+  input.setAttribute('aria-label', '任务标题');
+  input.value = task.title;
+  input.oninput = () => autoResizeTitle(input);
+  input.onblur = () => updateTaskField(taskId, 'title', input.value);
+  display.replaceWith(input);
+  autoResizeTitle(input);
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
 }
 
 function updateLayout() {

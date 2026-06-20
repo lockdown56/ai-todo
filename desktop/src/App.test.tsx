@@ -32,6 +32,11 @@ function setWindowWidth(width: number) {
   window.dispatchEvent(new Event("resize"));
 }
 
+async function openDetailTitleEditor(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: "编辑任务标题" }));
+  return screen.getByRole<HTMLTextAreaElement>("textbox", { name: "任务标题" });
+}
+
 describe("AI 清单 app", () => {
   it("requires login and authenticates with the configured account", async () => {
     localStorage.clear();
@@ -115,8 +120,8 @@ describe("AI 清单 app", () => {
     const input = await screen.findByRole("textbox", { name: "快速添加任务" });
     await user.type(input, "新增任务{enter}");
 
-    expect(await screen.findByDisplayValue("新增任务")).toBeInTheDocument();
-    expect(screen.getByText("任务详情")).toBeInTheDocument();
+    expect((await screen.findAllByText("新增任务")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("任务详情")).toBeInTheDocument();
   });
 
   it("edits a task title directly from the task list", async () => {
@@ -134,7 +139,7 @@ describe("AI 清单 app", () => {
     await user.type(input, "更新测试任务");
     await user.tab();
 
-    expect(await screen.findByText("更新测试任务")).toBeInTheDocument();
+    expect((await screen.findAllByText("更新测试任务")).length).toBeGreaterThan(0);
   });
 
   it("creates a real task row on Enter and keeps the new task selected", async () => {
@@ -259,7 +264,7 @@ describe("AI 清单 app", () => {
     expect(reopenCheckboxes.some((item) => item.getAttribute("aria-checked") === "true")).toBe(
       true,
     );
-    expect(screen.getByText("工作清单任务")).toBeInTheDocument();
+    expect(screen.getAllByText("工作清单任务").length).toBeGreaterThan(0);
   });
 
   it("updates the task checkbox color immediately when priority changes", async () => {
@@ -379,7 +384,7 @@ describe("AI 清单 app", () => {
     );
     renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
 
-    const detailTitle = await screen.findByRole("textbox", { name: "任务标题" });
+    const detailTitle = await screen.findByRole("button", { name: "编辑任务标题" });
     const expectedDates = ["1", "2", "3"].map((key) => {
       const date = new Date();
       date.setHours(0, 0, 0, 0);
@@ -466,7 +471,7 @@ describe("AI 清单 app", () => {
   it("does not close task details while an IME composition is active", async () => {
     renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
 
-    const title = await screen.findByRole("textbox", { name: "任务标题" });
+    const title = await screen.findByRole("button", { name: "编辑任务标题" });
     const escape = new KeyboardEvent("keydown", {
       key: "Escape",
       bubbles: true,
@@ -516,7 +521,7 @@ describe("AI 清单 app", () => {
     expect(await screen.findByRole("button", { name: "选择排序方式" })).toHaveTextContent(
       "优先级",
     );
-    expect(screen.getByText("工作清单任务")).toBeInTheDocument();
+    expect(screen.getAllByText("工作清单任务").length).toBeGreaterThan(0);
   });
 
   it("shows completed tasks in inbox below active tasks", async () => {
@@ -532,11 +537,11 @@ describe("AI 清单 app", () => {
     const user = userEvent.setup();
     renderApp();
 
-    await screen.findByText("编写测试");
+    expect((await screen.findAllByText("编写测试")).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /^工作/ }));
 
     expect(await screen.findByRole("heading", { name: "工作" })).toBeInTheDocument();
-    expect(screen.getByText("工作清单任务")).toBeInTheDocument();
+    expect(screen.getAllByText("工作清单任务").length).toBeGreaterThan(0);
     expect(document.querySelector(".task-section-label")).toHaveTextContent("已完成");
     expect(screen.getByText("已完成工作")).toBeInTheDocument();
   });
@@ -545,12 +550,12 @@ describe("AI 清单 app", () => {
     const user = userEvent.setup();
     renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
 
-    await screen.findByText("编写测试");
+    expect((await screen.findAllByText("编写测试")).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "今天" }));
     await screen.findByRole("heading", { name: "今天" });
 
     await user.click(screen.getByRole("button", { name: "收集箱" }));
-    expect(await screen.findByText("编写测试")).toBeInTheDocument();
+    expect((await screen.findAllByText("编写测试")).length).toBeGreaterThan(0);
     expect(JSON.parse(localStorage.getItem("todo-selected-tasks") || "{}")).toMatchObject({
       "view:inbox": "00000000-0000-4000-8000-000000000100",
     });
@@ -609,7 +614,7 @@ describe("AI 清单 app", () => {
     const user = userEvent.setup();
     renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
 
-    const title = await screen.findByRole("textbox", { name: "任务标题" });
+    const title = await openDetailTitleEditor(user);
     await user.clear(title);
     await user.type(title, "自动保存");
 
@@ -700,7 +705,7 @@ describe("AI 清单 app", () => {
     const user = userEvent.setup();
     renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
 
-    const title = await screen.findByRole("textbox", { name: "任务标题" });
+    const title = await openDetailTitleEditor(user);
     await user.clear(title);
     await user.type(title, "保留的编辑");
     expect(await screen.findByText("保存失败", {}, { timeout: 1500 })).toBeInTheDocument();
