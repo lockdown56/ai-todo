@@ -72,6 +72,8 @@ export function useTaskWorkspace() {
     group?: ListGroup;
   } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshingRef = useRef(false);
 
   const scope: Scope =
     params.listId !== undefined
@@ -176,6 +178,45 @@ export function useTaskWorkspace() {
     [completedTasksQuery.data],
   );
   const currentList = lists.data?.find((item) => item.id === scope.listId);
+
+  const refreshWorkspaceData = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setIsRefreshing(true);
+    try {
+      const refreshes: Promise<unknown>[] = [
+        lists.refetch(),
+        listGroups.refetch(),
+        tags.refetch(),
+        tasks.refetch(),
+      ];
+      if (listScopeId) refreshes.push(completedTasksQuery.refetch());
+      if (scope.view === "trash") refreshes.push(trashLists.refetch());
+      if (showArchived) refreshes.push(archivedLists.refetch());
+      if (selectedTaskId) {
+        refreshes.push(
+          queryClient.invalidateQueries({ queryKey: queryKeys.task(selectedTaskId) }),
+        );
+      }
+      await Promise.allSettled(refreshes);
+    } finally {
+      refreshingRef.current = false;
+      setIsRefreshing(false);
+    }
+  }, [
+    archivedLists,
+    completedTasksQuery,
+    listGroups,
+    listScopeId,
+    lists,
+    queryClient,
+    scope.view,
+    selectedTaskId,
+    showArchived,
+    tags,
+    tasks,
+    trashLists,
+  ]);
 
   const toggleSidebar = () => {
     if (compactSidebar) {
@@ -330,6 +371,7 @@ export function useTaskWorkspace() {
     setGroupDialog,
     showArchived,
     setShowArchived,
+    isRefreshing,
     sidebarCollapsed,
     setSidebarCollapsed,
     sidebarOverlayOpen,
@@ -364,6 +406,7 @@ export function useTaskWorkspace() {
     navigateAfterFlush,
     openTask,
     closeDetail,
+    refreshWorkspaceData,
     createTask,
     renameTask,
     createInlineTask,

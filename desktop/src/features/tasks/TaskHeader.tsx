@@ -8,7 +8,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { CalendarClock, ChevronDown, Flag, LoaderCircle, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import {
+  CalendarClock,
+  ChevronDown,
+  Flag,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { shouldIgnoreAppShortcut, isCtrlShortcut, isImeComposing } from "@/lib/keyboard-utils";
 import { priorityLabels, priorityShortcutValues } from "@/lib/constants";
@@ -23,11 +33,13 @@ export function TaskHeader({
   quickAddRef,
   createPending,
   createError,
+  refreshPending = false,
   leading,
   showQuickAdd = true,
   onSearch,
   onSort,
   onCreate,
+  onRefresh,
 }: {
   title: string;
   count: number;
@@ -36,12 +48,14 @@ export function TaskHeader({
   quickAddRef: React.RefObject<HTMLInputElement | null>;
   createPending: boolean;
   createError: string | null;
+  refreshPending?: boolean;
   /** 渲染在标题左侧的可选内容（移动端用于放置打开抽屉的按钮） */
   leading?: React.ReactNode;
   showQuickAdd?: boolean;
   onSearch: (value: string) => void;
   onSort: (sort: TaskSort) => void;
   onCreate: (payload: CreateTaskInput) => void;
+  onRefresh?: () => void | Promise<void>;
 }) {
   const [titleInput, setTitleInput] = useState("");
   const [quickPriority, setQuickPriority] = useState<0 | 1 | 3 | 5>(0);
@@ -90,6 +104,20 @@ export function TaskHeader({
           <span>{count} 个任务</span>
         </div>
         <div className="header-tools">
+          {onRefresh && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="icon-button"
+              type="button"
+              onClick={() => void onRefresh()}
+              disabled={refreshPending}
+              aria-label="刷新"
+              aria-busy={refreshPending}
+            >
+              <RefreshCw className={refreshPending ? "spin" : undefined} />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"

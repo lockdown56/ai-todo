@@ -31,6 +31,75 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
+  .mobile-refresh-area {
+    --pull-distance: 0px;
+    position: relative;
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .mobile-refresh-area > .task-list,
+  .mobile-refresh-area > .panel-state {
+    transform: translateY(var(--pull-distance));
+    transition: transform 180ms ease-out;
+    will-change: transform;
+  }
+
+  .mobile-refresh-area > .task-list {
+    overscroll-behavior-y: contain;
+  }
+
+  .mobile-refresh-area.is-pulling > .task-list,
+  .mobile-refresh-area.is-pulling > .panel-state {
+    transition: none;
+  }
+
+  .mobile-refresh-area.is-refreshing > .task-list,
+  .mobile-refresh-area.is-refreshing > .panel-state {
+    transition: transform 160ms ease-out;
+  }
+
+  .mobile-pull-refresh-indicator {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    z-index: 2;
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--background);
+    box-shadow: 0 8px 20px rgb(35 44 56 / 14%);
+    color: var(--muted-foreground);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, calc(var(--pull-distance) - 50px)) scale(0.92);
+    transition:
+      opacity 120ms ease-out,
+      transform 160ms ease-out,
+      color 120ms ease-out;
+  }
+
+  .mobile-pull-refresh-indicator svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .mobile-refresh-area.is-pulling .mobile-pull-refresh-indicator,
+  .mobile-refresh-area.is-refreshing .mobile-pull-refresh-indicator {
+    opacity: 1;
+    transform: translate(-50%, calc(var(--pull-distance) - 50px)) scale(1);
+  }
+
+  .mobile-refresh-area.is-ready .mobile-pull-refresh-indicator,
+  .mobile-refresh-area.is-refreshing .mobile-pull-refresh-indicator {
+    color: var(--primary);
+  }
+
   .mobile-bottom-nav {
     position: fixed;
     bottom: 0;

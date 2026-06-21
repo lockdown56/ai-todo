@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RefObject, TouchEvent as ReactTouchEvent } from "react";
+import type { CSSProperties, RefObject, TouchEvent as ReactTouchEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Inbox, Star, ListChecks, Menu, Plus, X, ArrowLeft, CheckCircle2, Trash2, UserRound, SlidersHorizontal } from "lucide-react";
+import {
+  Inbox,
+  Star,
+  ListChecks,
+  Menu,
+  Plus,
+  X,
+  ArrowLeft,
+  CheckCircle2,
+  Trash2,
+  UserRound,
+  SlidersHorizontal,
+  RefreshCw,
+} from "lucide-react";
 import { useTaskWorkspace } from "@/features/tasks/useTaskWorkspace";
 import { TaskHeader } from "@/features/tasks/TaskHeader";
 import { TaskListPanel } from "@/features/tasks/TaskListPanel";
@@ -51,6 +64,7 @@ export function MobileShell() {
     setSort,
     confirm,
     setConfirm,
+    isRefreshing,
     isProfileRoute,
     isSettingsRoute,
 
@@ -69,6 +83,7 @@ export function MobileShell() {
 
     openTask,
     closeDetail,
+    refreshWorkspaceData,
     createTask,
     renameTask,
     createInlineTask,
@@ -82,10 +97,97 @@ export function MobileShell() {
   // 左上角「更多」抽屉的开关状态
   const [moreOpen, setMoreOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const refreshAreaRef = useRef<HTMLDivElement>(null);
+  const pullStartY = useRef<number | null>(null);
+  const pullStartX = useRef<number | null>(null);
+  const pullDistanceRef = useRef(0);
+  const pullReadyRef = useRef(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullReady, setPullReady] = useState(false);
 
   const currentTitle = scope.listId
     ? currentList?.name || "清单"
     : viewNames[scope.view || "inbox"];
+  const pullRefreshDisabled =
+    isProfileRoute || isSettingsRoute || moreOpen || composerOpen || Boolean(selectedTaskId) || isRefreshing;
+
+  const resetPullRefresh = useCallback(() => {
+    pullDistanceRef.current = 0;
+    pullReadyRef.current = false;
+    setPullDistance(0);
+    setPullReady(false);
+  }, []);
+
+  const setPullRefreshDistance = useCallback((distance: number) => {
+    const nextDistance = Math.max(0, Math.min(distance, 88));
+    const ready = nextDistance >= 58;
+    pullDistanceRef.current = nextDistance;
+    pullReadyRef.current = ready;
+    setPullDistance(nextDistance);
+    setPullReady(ready);
+  }, []);
+
+  const getRefreshScroller = useCallback(
+    () => refreshAreaRef.current?.querySelector<HTMLElement>(".task-list") ?? refreshAreaRef.current,
+    [],
+  );
+
+  const isTextEditingTarget = (target: EventTarget | Element | null) =>
+    target instanceof HTMLElement &&
+    target.matches("input, textarea, select, [contenteditable='true']");
+
+  const onPullTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (pullRefreshDisabled || event.touches.length !== 1) return;
+    if (isTextEditingTarget(event.target)) return;
+    if (isTextEditingTarget(document.activeElement)) return;
+
+    const scroller = getRefreshScroller();
+    if (!scroller || scroller.scrollTop > 0) return;
+    pullStartY.current = event.touches[0].clientY;
+    pullStartX.current = event.touches[0].clientX;
+  };
+
+  const onPullTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (pullStartY.current === null || pullStartX.current === null) return;
+    const deltaY = event.touches[0].clientY - pullStartY.current;
+    const deltaX = Math.abs(event.touches[0].clientX - pullStartX.current);
+    if (deltaX > Math.max(24, deltaY)) {
+      resetPullRefresh();
+      pullStartY.current = null;
+      pullStartX.current = null;
+      return;
+    }
+    if (deltaY <= 0) {
+      setPullRefreshDistance(0);
+      return;
+    }
+    const scroller = getRefreshScroller();
+    if (scroller && scroller.scrollTop > 0) {
+      resetPullRefresh();
+      pullStartY.current = null;
+      pullStartX.current = null;
+      return;
+    }
+    if (event.cancelable) event.preventDefault();
+    setPullRefreshDistance(deltaY * 0.48);
+  };
+
+  const onPullTouchEnd = () => {
+    if (pullStartY.current === null) return;
+    pullStartY.current = null;
+    pullStartX.current = null;
+    if (!pullReadyRef.current) {
+      resetPullRefresh();
+      return;
+    }
+    setPullRefreshDistance(58);
+    void refreshWorkspaceData().finally(resetPullRefresh);
+  };
+
+  const visiblePullDistance = isRefreshing ? Math.max(pullDistance, 58) : pullDistance;
+  const pullRefreshStyle = {
+    "--pull-distance": `${visiblePullDistance}px`,
+  } as CSSProperties;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -164,57 +266,76 @@ export function MobileShell() {
             onSort={setSort}
             onCreate={(payload) => createTask.mutate(payload)}
           />
-          <TaskListPanel
-            tasks={taskItems}
-            completedTasks={listScopeId ? completedTaskItems : undefined}
-            activeTaskId={selectedTaskId}
-            view={scope.view}
-            loading={tasks.isPending}
-            completedLoading={listScopeId ? completedTasksQuery.isPending : undefined}
-            error={tasks.error}
-            hasNext={tasks.hasNextPage}
-            completedHasNext={listScopeId ? completedTasksQuery.hasNextPage : undefined}
-            fetchingNext={tasks.isFetchingNextPage}
-            completedFetchingNext={
-              listScopeId ? completedTasksQuery.isFetchingNextPage : undefined
-            }
-            onLoadMore={() => void tasks.fetchNextPage()}
-            onLoadMoreCompleted={
-              listScopeId ? () => void completedTasksQuery.fetchNextPage() : undefined
-            }
-            onSelect={openTask}
-            onRename={renameTask}
-            onCreateNext={createInlineTask}
-            onDeleteEmpty={deleteInlineTask}
-            onClearSelection={closeDetail}
-            onDelete={(task) =>
-              setConfirm({
-                title: "删除任务",
-                message: "任务将进入回收站，你可以稍后恢复。",
-                action: () => {
-                  setConfirm(null);
-                  deleteTaskMutation.mutate(task.id);
-                },
-              })
-            }
-            onRestore={(task) => restoreTaskMutation.mutate(task.id)}
-            onPermanentDelete={(task) =>
-              setConfirm({
-                title: "永久删除任务",
-                message: "任务、检查项和标签关联将被永久删除，此操作不可撤销。",
-                action: () => {
-                  setConfirm(null);
-                  permanentTaskMutation.mutate(task.id);
-                },
-              })
-            }
-            onToggle={(task) =>
-              stateMutation.mutate({
-                task,
-                action: task.status === 2 ? "reopen" : "complete",
-              })
-            }
-          />
+          <div
+            ref={refreshAreaRef}
+            className={`mobile-refresh-area ${
+              visiblePullDistance > 0 || isRefreshing ? "is-pulling" : ""
+            } ${pullReady ? "is-ready" : ""} ${isRefreshing ? "is-refreshing" : ""}`}
+            style={pullRefreshStyle}
+            onTouchStart={onPullTouchStart}
+            onTouchMove={onPullTouchMove}
+            onTouchEnd={onPullTouchEnd}
+            onTouchCancel={resetPullRefresh}
+          >
+            <div
+              className="mobile-pull-refresh-indicator"
+              role="status"
+              aria-label={isRefreshing ? "正在刷新" : "下拉刷新"}
+            >
+              <RefreshCw className={isRefreshing ? "spin" : undefined} />
+            </div>
+            <TaskListPanel
+              tasks={taskItems}
+              completedTasks={listScopeId ? completedTaskItems : undefined}
+              activeTaskId={selectedTaskId}
+              view={scope.view}
+              loading={tasks.isPending}
+              completedLoading={listScopeId ? completedTasksQuery.isPending : undefined}
+              error={tasks.error}
+              hasNext={tasks.hasNextPage}
+              completedHasNext={listScopeId ? completedTasksQuery.hasNextPage : undefined}
+              fetchingNext={tasks.isFetchingNextPage}
+              completedFetchingNext={
+                listScopeId ? completedTasksQuery.isFetchingNextPage : undefined
+              }
+              onLoadMore={() => void tasks.fetchNextPage()}
+              onLoadMoreCompleted={
+                listScopeId ? () => void completedTasksQuery.fetchNextPage() : undefined
+              }
+              onSelect={openTask}
+              onRename={renameTask}
+              onCreateNext={createInlineTask}
+              onDeleteEmpty={deleteInlineTask}
+              onClearSelection={closeDetail}
+              onDelete={(task) =>
+                setConfirm({
+                  title: "删除任务",
+                  message: "任务将进入回收站，你可以稍后恢复。",
+                  action: () => {
+                    setConfirm(null);
+                    deleteTaskMutation.mutate(task.id);
+                  },
+                })
+              }
+              onRestore={(task) => restoreTaskMutation.mutate(task.id)}
+              onPermanentDelete={(task) =>
+                setConfirm({
+                  title: "永久删除任务",
+                  message: "任务、检查项和标签关联将被永久删除，此操作不可撤销。",
+                  action: () => {
+                    setConfirm(null);
+                    permanentTaskMutation.mutate(task.id);
+                  },
+                })
+              }
+              onToggle={(task) =>
+                stateMutation.mutate({
+                  task,
+                  action: task.status === 2 ? "reopen" : "complete",
+                })
+              }
+            />
+          </div>
         </>
       )}
 

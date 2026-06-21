@@ -105,6 +105,36 @@ describe("AI 清单 app", () => {
     expect(screen.getByRole("button", { name: "收起侧栏" })).toBeInTheDocument();
   });
 
+  it("refreshes the current desktop task view from the header", async () => {
+    let showRemoteUpdate = false;
+    server.use(
+      http.get("http://127.0.0.1:8000/api/v1/tasks", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("view") === "inbox") {
+          return HttpResponse.json({
+            items: [
+              makeTask({
+                title: showRemoteUpdate ? "远端更新任务" : "编写测试",
+              }),
+            ],
+            next_cursor: null,
+          });
+        }
+        return HttpResponse.json({ items: [], next_cursor: null });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(await screen.findByText("编写测试")).toBeInTheDocument();
+
+    showRemoteUpdate = true;
+    await user.click(screen.getByRole("button", { name: "刷新" }));
+
+    expect(await screen.findByText("远端更新任务")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("编写测试")).not.toBeInTheDocument());
+  });
+
   it("hides the empty detail panel when the layout switches to a drawer", async () => {
     setWindowWidth(1000);
     const { container } = renderApp();
@@ -895,6 +925,81 @@ describe("AI 清单 app", () => {
     expect(screen.getByText("个人中心")).toBeInTheDocument();
     expect(screen.getByText("设置")).toBeInTheDocument();
     expect(screen.getByText("工作")).toBeInTheDocument();
+  });
+
+  it("pulls to refresh the current task list on mobile", async () => {
+    setWindowWidth(390);
+    let showRemoteUpdate = false;
+    server.use(
+      http.get("http://127.0.0.1:8000/api/v1/tasks", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("view") === "inbox") {
+          return HttpResponse.json({
+            items: [
+              makeTask({
+                title: showRemoteUpdate ? "移动端远端任务" : "编写测试",
+              }),
+            ],
+            next_cursor: null,
+          });
+        }
+        return HttpResponse.json({ items: [], next_cursor: null });
+      }),
+    );
+    const { container } = renderApp();
+
+    expect(await screen.findByText("编写测试")).toBeInTheDocument();
+    showRemoteUpdate = true;
+
+    const refreshArea = container.querySelector(".mobile-refresh-area");
+    expect(refreshArea).not.toBeNull();
+    fireEvent.touchStart(refreshArea!, { touches: [{ clientX: 20, clientY: 0 }] });
+    fireEvent.touchMove(refreshArea!, { touches: [{ clientX: 22, clientY: 140 }] });
+    fireEvent.touchEnd(refreshArea!, { changedTouches: [{ clientX: 22, clientY: 140 }] });
+
+    expect(await screen.findByText("移动端远端任务")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("编写测试")).not.toBeInTheDocument());
+  });
+
+  it("does not pull to refresh mobile tasks while the list is scrolled", async () => {
+    setWindowWidth(390);
+    let inboxRequests = 0;
+    let showRemoteUpdate = false;
+    server.use(
+      http.get("http://127.0.0.1:8000/api/v1/tasks", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("view") === "inbox") {
+          inboxRequests += 1;
+          return HttpResponse.json({
+            items: [
+              makeTask({
+                title: showRemoteUpdate ? "不应显示的远端任务" : "编写测试",
+              }),
+            ],
+            next_cursor: null,
+          });
+        }
+        return HttpResponse.json({ items: [], next_cursor: null });
+      }),
+    );
+    const { container } = renderApp();
+
+    expect(await screen.findByText("编写测试")).toBeInTheDocument();
+    const initialRequests = inboxRequests;
+    showRemoteUpdate = true;
+
+    const taskList = container.querySelector<HTMLElement>(".task-list");
+    const refreshArea = container.querySelector(".mobile-refresh-area");
+    expect(taskList).not.toBeNull();
+    expect(refreshArea).not.toBeNull();
+    taskList!.scrollTop = 40;
+    fireEvent.touchStart(refreshArea!, { touches: [{ clientX: 20, clientY: 0 }] });
+    fireEvent.touchMove(refreshArea!, { touches: [{ clientX: 22, clientY: 140 }] });
+    fireEvent.touchEnd(refreshArea!, { changedTouches: [{ clientX: 22, clientY: 140 }] });
+
+    await act(async () => {});
+    expect(inboxRequests).toBe(initialRequests);
+    expect(screen.queryByText("不应显示的远端任务")).not.toBeInTheDocument();
   });
 
   it("opens task detail full-screen on mobile", async () => {

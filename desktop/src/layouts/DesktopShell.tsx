@@ -40,6 +40,7 @@ export function DesktopShell() {
     setGroupDialog,
     showArchived,
     setShowArchived,
+    isRefreshing,
     compactSidebar,
     detailDrawer,
     effectiveSidebarCollapsed,
@@ -69,6 +70,7 @@ export function DesktopShell() {
     navigateAfterFlush,
     openTask,
     closeDetail,
+    refreshWorkspaceData,
     createTask,
     renameTask,
     createInlineTask,
@@ -301,9 +303,11 @@ export function DesktopShell() {
                 quickAddRef={quickAddRef}
                 createPending={createTask.isPending}
                 createError={createTask.error ? errorMessage(createTask.error) : null}
+                refreshPending={isRefreshing}
                 onSearch={setSearch}
                 onSort={setSort}
                 onCreate={(payload) => createTask.mutate(payload)}
+                onRefresh={refreshWorkspaceData}
               />
               {scope.view === "trash" && (trashLists.data?.length || 0) > 0 && (
                 <DeletedLists
