@@ -803,8 +803,8 @@ body.is-list-sorting .sortable-list-item {
 }
 
 .quick-add-chip.priority-5 {
-  color: #c96f43;
-  border-color: #c96f43;
+  color: #b5453f;
+  border-color: #b5453f;
 }
 
 .search-field {
@@ -927,7 +927,7 @@ body.is-list-sorting .sortable-list-item {
 }
 
 .task-checkbox.priority-5 {
-  --checkbox-accent: #c96f43;
+  --checkbox-accent: #b5453f;
 }
 
 .task-checkbox.has-priority {
