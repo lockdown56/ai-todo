@@ -182,6 +182,18 @@
   }
 }
 
+.refresh-button .refresh-icon {
+  transition: transform 250ms ease;
+}
+
+.refresh-button:not(:disabled):hover .refresh-icon {
+  transform: rotate(-30deg);
+}
+
+.refresh-button:not(:disabled):active .refresh-icon:not(.spin) {
+  transform: rotate(180deg);
+}
+
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;

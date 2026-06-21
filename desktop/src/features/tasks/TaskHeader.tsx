@@ -61,6 +61,8 @@ export function TaskHeader({
   const [quickPriority, setQuickPriority] = useState<0 | 1 | 3 | 5>(0);
   const [quickDueAt, setQuickDueAt] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(Boolean(search));
+  const [refreshSpin, setRefreshSpin] = useState(false);
+  const refreshSpinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const sortOptions: [TaskSort, string][] = [
     ["manual", "手动"],
@@ -95,6 +97,20 @@ export function TaskHeader({
     if (searchOpen) window.requestAnimationFrame(() => searchRef.current?.focus());
   }, [searchOpen]);
 
+  useEffect(() => {
+    return () => {
+      if (refreshSpinTimer.current) clearTimeout(refreshSpinTimer.current);
+    };
+  }, []);
+
+  const handleRefresh = () => {
+    if (!onRefresh) return;
+    setRefreshSpin(true);
+    if (refreshSpinTimer.current) clearTimeout(refreshSpinTimer.current);
+    refreshSpinTimer.current = setTimeout(() => setRefreshSpin(false), 500);
+    void onRefresh();
+  };
+
   return (
     <header className="middle-header">
       <div className="title-row">
@@ -108,14 +124,19 @@ export function TaskHeader({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="icon-button"
+              className="icon-button refresh-button"
               type="button"
-              onClick={() => void onRefresh()}
+              onClick={handleRefresh}
               disabled={refreshPending}
               aria-label="刷新"
               aria-busy={refreshPending}
             >
-              <RefreshCw className={refreshPending ? "spin" : undefined} />
+              <RefreshCw
+                className={cn(
+                  "refresh-icon",
+                  (refreshPending || refreshSpin) && "spin",
+                )}
+              />
             </Button>
           )}
           <Button
