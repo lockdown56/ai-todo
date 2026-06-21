@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Archive, CircleAlert, LoaderCircle, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
 import { errorMessage } from "@/lib/error-utils";
 import { formatDue, dueDateTone } from "@/lib/date-utils";
-import type { Task, TaskView } from "@/types";
+import type { Task, TaskList, TaskView } from "@/types";
 
 function PanelState({ icon, title, description }: { icon: React.ReactNode; title: string; description?: string }) {
   return <div className="panel-state"><div>{icon}</div><strong>{title}</strong>{description && <span>{description}</span>}</div>;
@@ -28,6 +28,7 @@ export function TaskListPanel({
   completedTasks,
   activeTaskId,
   view,
+  lists,
   loading,
   completedLoading,
   error,
@@ -51,6 +52,7 @@ export function TaskListPanel({
   completedTasks?: Task[];
   activeTaskId?: string;
   view?: TaskView;
+  lists?: TaskList[];
   loading: boolean;
   completedLoading?: boolean;
   error: unknown;
@@ -178,6 +180,9 @@ export function TaskListPanel({
 
   const renderTaskRow = (task: Task) => {
     const editing = editingTaskId === task.id;
+    const owningList =
+      view === "all" ? lists?.find((list) => list.id === task.list_id) : undefined;
+    const showListTag = view === "all" && Boolean(owningList);
     const actionItems = view === "trash"
       ? (
           <>
@@ -265,8 +270,14 @@ export function TaskListPanel({
             ) : (
               <span className="task-title">{task.title}</span>
             )}
-            {(task.due_at || (!editing && task.tags.length > 0)) && (
+            {(task.due_at || (!editing && task.tags.length > 0) || showListTag) && (
               <span className="task-meta">
+                {showListTag && owningList && (
+                  <span className="list-tag-mini">
+                    <span className="list-dot" style={{ backgroundColor: owningList.color }} />
+                    <span className="list-tag-name">{owningList.name}</span>
+                  </span>
+                )}
                 {task.due_at && (
                   <span className={`task-date ${dueDateTone(task)}`}>{formatDue(task)}</span>
                 )}

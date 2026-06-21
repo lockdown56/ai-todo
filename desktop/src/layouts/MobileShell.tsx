@@ -289,6 +289,7 @@ export function MobileShell() {
               completedTasks={listScopeId ? completedTaskItems : undefined}
               activeTaskId={selectedTaskId}
               view={scope.view}
+              lists={lists.data || []}
               loading={tasks.isPending}
               completedLoading={listScopeId ? completedTasksQuery.isPending : undefined}
               error={tasks.error}

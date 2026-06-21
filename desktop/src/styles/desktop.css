@@ -1023,6 +1023,29 @@ body.is-list-sorting .sortable-list-item {
   white-space: nowrap;
 }
 
+.list-tag-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 96px;
+  overflow: hidden;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: #eef1f4;
+  color: #606a76;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.list-tag-mini .list-tag-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-row.completed .list-tag-mini {
+  color: var(--task-completed);
+}
+
 .next-page {
   display: flex;
   align-items: center;
