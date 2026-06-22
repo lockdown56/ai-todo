@@ -120,3 +120,16 @@ export type TaskPatch = Partial<{
   sort_order: number;
   tag_ids: string[];
 }>;
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface ApiKeyCreated extends ApiKey {
+  api_key: string;
+}

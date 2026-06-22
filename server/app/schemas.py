@@ -22,6 +22,30 @@ class AuthUserResponse(BaseModel):
     display_name: str
 
 
+class ApiKeyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        if not (cleaned := value.strip()):
+            raise ValueError("API Key 名称不能为空")
+        return cleaned
+
+
+class ApiKeyResponse(ApiModel):
+    id: UUID
+    name: str
+    key_prefix: str
+    last_used_at: datetime | None
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class ApiKeyCreatedResponse(ApiKeyResponse):
+    api_key: str
+
+
 class AuthTokenResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"

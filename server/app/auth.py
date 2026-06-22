@@ -10,10 +10,13 @@ from typing import Annotated, Any
 
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.constants import DEFAULT_USER_ID
+from app.database import get_session
 from app.errors import ApiError
+from app.services import API_KEY_PREFIX, verify_api_key
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -98,7 +101,26 @@ def verify_credentials(username: str, password: str, settings: Settings) -> bool
 async def require_auth(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, Any]:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise ApiError(401, "AUTH_REQUIRED", "请先登录")
-    return decode_access_token(credentials.credentials, settings)
+    token = credentials.credentials
+    if token.startswith(API_KEY_PREFIX):
+        api_key = await verify_api_key(session, token)
+        return {
+            "credential_type": "api_key",
+            "sub": str(api_key.user_id),
+            "api_key_id": str(api_key.id),
+        }
+    payload = decode_access_token(token, settings)
+    payload["credential_type"] = "jwt"
+    return payload
+
+
+async def require_jwt_auth(
+    payload: Annotated[dict[str, Any], Depends(require_auth)],
+) -> dict[str, Any]:
+    if payload.get("credential_type") != "jwt":
+        raise ApiError(403, "API_KEY_NOT_ALLOWED", "此接口不允许使用 API Key")
+    return payload

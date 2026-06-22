@@ -11,4 +11,5 @@ export const queryKeys = {
       : (["tasks", scope, query, sort, status] as const),
   task: (id: string) => ["task", id] as const,
   tags: ["tags"] as const,
+  apiKeys: ["api-keys"] as const,
 };

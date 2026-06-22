@@ -1,5 +1,7 @@
 import base64
+import hashlib
 import json
+import secrets
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -16,9 +18,12 @@ from app.constants import (
     SORT_GAP,
 )
 from app.errors import ApiError
-from app.models import ListGroup, Tag, Task, TaskList, User
+from app.models import ApiKey, ListGroup, Tag, Task, TaskList, User
 from app.repositories import get_group, get_list, get_task, task_with_details
 from app.schemas import TaskSort, TaskView
+
+API_KEY_PREFIX = "tdl_"
+API_KEY_PREFIX_DISPLAY_LEN = 12
 
 
 async def initialize_data(session: AsyncSession) -> None:
@@ -319,3 +324,47 @@ async def list_tasks(
         encode_cursor(cursor_value(tasks[-1], sort), tasks[-1].id) if has_more and tasks else None
     )
     return tasks, next_cursor
+
+
+def _hash_api_key(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def create_api_key(session: AsyncSession, name: str) -> tuple[ApiKey, str]:
+    raw = API_KEY_PREFIX + secrets.token_urlsafe(32)
+    api_key = ApiKey(
+        user_id=DEFAULT_USER_ID,
+        name=name,
+        key_hash=_hash_api_key(raw),
+        key_prefix=raw[:API_KEY_PREFIX_DISPLAY_LEN],
+    )
+    session.add(api_key)
+    return api_key, raw
+
+
+async def list_api_keys(session: AsyncSession) -> list[ApiKey]:
+    result = await session.scalars(
+        select(ApiKey)
+        .where(ApiKey.user_id == DEFAULT_USER_ID)
+        .order_by(ApiKey.created_at.desc())
+    )
+    return list(result.all())
+
+
+async def get_api_key(session: AsyncSession, key_id: UUID) -> ApiKey | None:
+    return await session.scalar(
+        select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == DEFAULT_USER_ID)
+    )
+
+
+async def verify_api_key(session: AsyncSession, raw: str) -> ApiKey:
+    key_hash = _hash_api_key(raw)
+    api_key = await session.scalar(select(ApiKey).where(ApiKey.key_hash == key_hash))
+    if api_key is None:
+        raise ApiError(401, "INVALID_API_KEY", "API Key 无效或已吊销")
+    if api_key.expires_at is not None and api_key.expires_at <= datetime.now(UTC):
+        raise ApiError(401, "API_KEY_EXPIRED", "API Key 已过期")
+    await session.execute(
+        update(ApiKey).where(ApiKey.id == api_key.id).values(last_used_at=datetime.now(UTC))
+    )
+    return api_key

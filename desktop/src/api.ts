@@ -1,5 +1,7 @@
 import type {
   ApiErrorPayload,
+  ApiKey,
+  ApiKeyCreated,
   AuthToken,
   AuthUser,
   ChecklistItem,
@@ -194,6 +196,11 @@ export const api = {
     request<void>(`/api/v1/tasks/${taskId}/items/${itemId}`, json("DELETE")),
   reorderItems: (taskId: string, itemIds: string[]) =>
     request<ChecklistItem[]>(`/api/v1/tasks/${taskId}/items/reorder`, json("POST", { item_ids: itemIds })),
+
+  apiKeys: () => request<ApiKey[]>("/api/v1/api-keys"),
+  createApiKey: (name: string) =>
+    request<ApiKeyCreated>("/api/v1/api-keys", json("POST", { name })),
+  deleteApiKey: (id: string) => request<void>(`/api/v1/api-keys/${id}`, json("DELETE")),
 };
 
 export async function testApiBaseUrl(baseUrl: string): Promise<Health> {

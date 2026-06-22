@@ -693,6 +693,118 @@ body.is-list-sorting .sortable-list-item {
   justify-content: space-between;
 }
 
+.api-keys-card {
+  gap: 14px;
+}
+
+.api-key-create-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.api-key-create-form .form-field {
+  flex: 1;
+}
+
+.api-key-loading,
+.api-key-empty {
+  padding: 16px 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: center;
+}
+
+.api-key-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.api-key-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.api-key-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.api-key-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.api-key-name-row strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.api-key-icon {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+
+.api-key-prefix {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.api-key-meta {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+}
+
+.api-key-meta > div {
+  display: flex;
+  gap: 6px;
+}
+
+.api-key-meta dt {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.api-key-meta dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.api-key-reveal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.api-key-plaintext {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.api-key-reveal-hint {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
 .middle-header {
   width: 100%;
   flex: 0 0 auto;

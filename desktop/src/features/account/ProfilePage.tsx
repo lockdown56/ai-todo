@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { LogOut, UserRound } from "lucide-react";
 import { clearAuthSession, getStoredUser, notifyAuthChanged } from "@/auth";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { ApiKeyPanel } from "./ApiKeyPanel";
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -59,6 +60,7 @@ export function ProfilePage() {
           </div>
         </dl>
       </section>
+      <ApiKeyPanel />
       <section className="settings-card profile-danger" aria-label="登录管理">
         <div>
           <strong>退出当前账号</strong>

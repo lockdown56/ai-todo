@@ -442,3 +442,67 @@ async def test_cursor_pagination(client):
         },
     )
     assert len(second_page.json()["items"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_api_key_crud_and_bearer_auth(client):
+    created = await client.post("/api/v1/api-keys", json={"name": "CI 脚本"})
+    assert created.status_code == 201
+    body = created.json()
+    assert body["name"] == "CI 脚本"
+    assert body["api_key"].startswith("tdl_")
+    assert body["key_prefix"].startswith("tdl_")
+    raw_key = body["api_key"]
+    key_id = body["id"]
+
+    listed = await client.get("/api/v1/api-keys")
+    assert listed.status_code == 200
+    items = listed.json()
+    assert len(items) == 1
+    assert items[0]["id"] == key_id
+    assert "api_key" not in items[0]
+    assert items[0]["key_prefix"] == body["key_prefix"]
+
+    jwt_auth = client.headers["Authorization"]
+    client.headers["Authorization"] = f"Bearer {raw_key}"
+    me = await client.get("/api/v1/auth/me")
+    assert me.status_code == 200
+    assert me.json()["username"] == "admin"
+
+    inbox = await client.get("/api/v1/lists")
+    assert inbox.status_code == 200
+
+    client.headers["Authorization"] = jwt_auth
+    deleted = await client.delete(f"/api/v1/api-keys/{key_id}")
+    assert deleted.status_code == 204
+
+    client.headers["Authorization"] = f"Bearer {raw_key}"
+    revoked = await client.get("/api/v1/auth/me")
+    assert revoked.status_code == 401
+    assert revoked.json()["error"]["code"] == "INVALID_API_KEY"
+    client.headers["Authorization"] = jwt_auth
+
+
+@pytest.mark.asyncio
+async def test_api_key_routes_reject_api_key_credential(client):
+    created = await client.post("/api/v1/api-keys", json={"name": "自管理测试"})
+    raw_key = created.json()["api_key"]
+
+    jwt_auth = client.headers["Authorization"]
+    client.headers["Authorization"] = f"Bearer {raw_key}"
+    rejected = await client.post("/api/v1/api-keys", json={"name": "不应创建"})
+    assert rejected.status_code == 403
+    assert rejected.json()["error"]["code"] == "API_KEY_NOT_ALLOWED"
+
+    listed = await client.get("/api/v1/api-keys")
+    assert listed.status_code == 403
+    client.headers["Authorization"] = jwt_auth
+
+
+@pytest.mark.asyncio
+async def test_api_key_delete_missing_returns_404(client):
+    missing = await client.delete(
+        "/api/v1/api-keys/00000000-0000-4000-8000-0000000000ff"
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "API_KEY_NOT_FOUND"

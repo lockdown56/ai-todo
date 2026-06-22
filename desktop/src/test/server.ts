@@ -227,6 +227,27 @@ export const handlers = [
       return HttpResponse.json(task);
     },
   ),
+  http.get("http://127.0.0.1:8000/api/v1/api-keys", () =>
+    HttpResponse.json([]),
+  ),
+  http.post("http://127.0.0.1:8000/api/v1/api-keys", async ({ request }) => {
+    const body = (await request.json()) as { name: string };
+    return HttpResponse.json(
+      {
+        id: "00000000-0000-4000-8000-000000000030",
+        name: body.name,
+        key_prefix: "tdl_testpre01",
+        last_used_at: null,
+        expires_at: null,
+        created_at: now,
+        api_key: "tdl_mocksecretvalue123",
+      },
+      { status: 201 },
+    );
+  }),
+  http.delete("http://127.0.0.1:8000/api/v1/api-keys/:keyId", () =>
+    new HttpResponse(null, { status: 204 }),
+  ),
 ];
 
 export const server = setupServer(...handlers);

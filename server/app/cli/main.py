@@ -51,6 +51,9 @@ def _get_token(ctx: typer.Context) -> str | None:
     explicit = obj.get("token") or os.environ.get("TODOLIST_TOKEN")
     if explicit:
         return explicit
+    api_key = obj.get("api_key") or os.environ.get("TODOLIST_API_KEY")
+    if api_key:
+        return api_key
     session = get_session(_get_api_url(ctx))
     token = session.get("access_token") if session else None
     return token if isinstance(token, str) else None
@@ -82,6 +85,9 @@ def root(
     api_url: str | None = typer.Option(None, envvar="TODOLIST_API_URL", help="API 根地址"),
     timeout: float | None = typer.Option(None, envvar="TODOLIST_TIMEOUT", help="请求超时秒数"),
     token: str | None = typer.Option(None, envvar="TODOLIST_TOKEN", help="Bearer 访问令牌"),
+    api_key: str | None = typer.Option(
+        None, envvar="TODOLIST_API_KEY", help="API Key (长期凭据，替代 JWT)"
+    ),
     output: str | None = typer.Option(
         None, envvar="TODOLIST_OUTPUT", help="输出格式: json/jsonl/table"
     ),
@@ -92,6 +98,7 @@ def root(
     ctx.obj["api_url"] = api_url
     ctx.obj["timeout"] = timeout
     ctx.obj["token"] = token
+    ctx.obj["api_key"] = api_key
     ctx.obj["output"] = output
     ctx.obj["pretty"] = pretty
     if version:
@@ -184,6 +191,47 @@ def auth_logout(ctx: typer.Context) -> None:
     api_url = _get_api_url(ctx)
     removed = delete_session(api_url)
     _success(ctx, {"api_url": api_url, "logged_out": removed})
+
+
+# ---------------------------------------------------------------------------
+# API Key commands
+# ---------------------------------------------------------------------------
+api_key_app = typer.Typer(help="API Key 管理", no_args_is_help=True)
+app.add_typer(api_key_app, name="api-key")
+
+
+@api_key_app.command("create")
+def api_key_create(
+    ctx: typer.Context,
+    name: str = typer.Option(..., "--name", help="API Key 名称标签"),
+) -> None:
+    """创建 API Key（明文仅返回一次，请妥善保管）"""
+    with _make_client(ctx) as client:
+        data = client.post("/api/v1/api-keys", json={"name": name})
+        _success(ctx, data)
+
+
+@api_key_app.command("ls")
+def api_key_ls(ctx: typer.Context) -> None:
+    """列出 API Key（不返回明文）"""
+    with _make_client(ctx) as client:
+        data = client.get("/api/v1/api-keys")
+        _success(ctx, data)
+
+
+@api_key_app.command("delete")
+def api_key_delete(
+    ctx: typer.Context,
+    key_id: str = typer.Argument(..., help="API Key UUID"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="确认删除"),
+) -> None:
+    """吊销（删除）API Key"""
+    if not yes:
+        cli_exit_error("CONFIRMATION_REQUIRED", "吊销 API Key 需要 --yes 确认")
+    kid = parse_uuid(key_id, "API Key ID")
+    with _make_client(ctx) as client:
+        client.delete(f"/api/v1/api-keys/{kid}")
+        _success(ctx, {"id": str(kid), "deleted": True, "permanent": True})
 
 
 # ---------------------------------------------------------------------------
