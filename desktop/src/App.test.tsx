@@ -297,6 +297,19 @@ describe("AI 清单 app", () => {
     expect(screen.getAllByText("工作清单任务").length).toBeGreaterThan(0);
   });
 
+  it("keeps a completed task visible briefly before removing it from active views", async () => {
+    const user = userEvent.setup();
+    renderApp("/view/all");
+
+    const checkbox = await screen.findByRole("checkbox", { name: "完成任务" });
+    await user.click(checkbox);
+
+    expect(await screen.findByRole("checkbox", { name: "重新打开任务" })).toBeChecked();
+    expect(screen.getByText("编写测试")).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.queryByText("编写测试")).not.toBeInTheDocument());
+  });
+
   it("updates the task checkbox color immediately when priority changes", async () => {
     const user = userEvent.setup();
     renderApp("/view/inbox?task=00000000-0000-4000-8000-000000000100");
