@@ -40,6 +40,8 @@ interface EditorHandle {
   flush: () => Promise<boolean>;
 }
 
+const COMPLETED_TASK_REMOVAL_DELAY_MS = 200;
+
 export function useTaskWorkspace() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -74,6 +76,7 @@ export function useTaskWorkspace() {
   const [showArchived, setShowArchived] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const refreshingRef = useRef(false);
+  const completedRemovalTimersRef = useRef(new Set<number>());
 
   const scope: Scope =
     params.listId !== undefined
@@ -88,6 +91,14 @@ export function useTaskWorkspace() {
   useEffect(() => {
     setSortState(getTaskSort(scopeKey));
   }, [scopeKey]);
+
+  useEffect(
+    () => () => {
+      completedRemovalTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      completedRemovalTimersRef.current.clear();
+    },
+    [],
+  );
 
   useEffect(() => {
     if (isUtilityRoute) return;
@@ -315,7 +326,34 @@ export function useTaskWorkspace() {
   const stateMutation = useMutation({
     mutationFn: ({ task, action }: { task: Task; action: "complete" | "reopen" }) =>
       action === "complete" ? api.completeTask(task.id) : api.reopenTask(task.id),
-    onSuccess: (task) => invalidateTaskData(queryClient, task.id),
+    onMutate: ({ task, action }) => {
+      const optimisticTask: Task = {
+        ...task,
+        status: action === "complete" ? 2 : 0,
+        completed_at: action === "complete" ? task.completed_at || new Date().toISOString() : null,
+      };
+      updateTaskListCache(queryClient, task.id, optimisticTask);
+      queryClient.setQueryData(queryKeys.task(task.id), optimisticTask);
+      return { previousTask: task };
+    },
+    onError: (_error, { task }, context) => {
+      const previousTask = context?.previousTask || task;
+      updateTaskListCache(queryClient, task.id, previousTask);
+      queryClient.setQueryData(queryKeys.task(task.id), previousTask);
+    },
+    onSuccess: (task, { action }) => {
+      updateTaskListCache(queryClient, task.id, task);
+      queryClient.setQueryData(queryKeys.task(task.id), task);
+      if (action === "complete") {
+        const timer = window.setTimeout(() => {
+          completedRemovalTimersRef.current.delete(timer);
+          invalidateTaskData(queryClient, task.id);
+        }, COMPLETED_TASK_REMOVAL_DELAY_MS);
+        completedRemovalTimersRef.current.add(timer);
+        return;
+      }
+      invalidateTaskData(queryClient, task.id);
+    },
   });
 
   const applyTaskShortcut = useCallback(
