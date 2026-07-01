@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Mutex,
+use std::{
+    env,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
 };
 
 use serde::{Deserialize, Serialize};
@@ -26,6 +29,7 @@ fn default_true() -> bool {
 pub struct TrayState {
     settings: Mutex<TraySettings>,
     exiting: AtomicBool,
+    available: AtomicBool,
 }
 
 impl TrayState {
@@ -33,6 +37,7 @@ impl TrayState {
         Self {
             settings: Mutex::new(TraySettings::default()),
             exiting: AtomicBool::new(false),
+            available: AtomicBool::new(false),
         }
     }
 }
@@ -55,17 +60,25 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
+fn is_wsl() -> bool {
+    cfg!(target_os = "linux") && env::var_os("WSL_DISTRO_NAME").is_some()
+}
+
 pub fn setup_tray(app: &mut App) -> tauri::Result<()> {
+    if is_wsl() {
+        return Ok(());
+    }
+
     let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .expect("missing default window icon for tray");
+    let Some(icon) = app.default_window_icon().cloned() else {
+        eprintln!("Skipping tray setup: missing default window icon");
+        return Ok(());
+    };
 
-    TrayIconBuilder::with_id("main")
+    if let Err(error) = TrayIconBuilder::with_id("main")
         .icon(icon)
         .menu(&menu)
         .tooltip("AI 清单")
@@ -89,13 +102,25 @@ pub fn setup_tray(app: &mut App) -> tauri::Result<()> {
                 show_main_window(tray.app_handle());
             }
         })
-        .build(app)?;
+        .build(app)
+    {
+        eprintln!("Skipping tray setup: {error}");
+        return Ok(());
+    }
 
+    app.state::<TrayState>()
+        .available
+        .store(true, Ordering::SeqCst);
     Ok(())
 }
 
 pub fn handle_window_event(window: &Window, event: &WindowEvent) {
-    let settings = window.state::<TrayState>().settings.lock().unwrap().clone();
+    let tray_state = window.state::<TrayState>();
+    if !tray_state.available.load(Ordering::SeqCst) {
+        return;
+    }
+
+    let settings = tray_state.settings.lock().unwrap().clone();
 
     match event {
         WindowEvent::CloseRequested { api, .. } => {
@@ -116,6 +141,10 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
 pub fn handle_run_event(app: &AppHandle, event: &tauri::RunEvent) {
     if let tauri::RunEvent::ExitRequested { api, .. } = event {
         let tray_state = app.state::<TrayState>();
+        if !tray_state.available.load(Ordering::SeqCst) {
+            return;
+        }
+
         let close_to_tray = tray_state.settings.lock().unwrap().close_to_tray;
         let exiting = tray_state.exiting.load(Ordering::SeqCst);
         if close_to_tray && !exiting {

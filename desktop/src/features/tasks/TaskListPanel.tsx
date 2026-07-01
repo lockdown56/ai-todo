@@ -73,6 +73,7 @@ export function TaskListPanel({
   onToggle: (task: Task) => void;
 }) {
   const [editingTaskId, setEditingTaskId] = useState<string>();
+  const [hoveredCheckboxTaskId, setHoveredCheckboxTaskId] = useState<string>();
   const [editTitle, setEditTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [inlineError, setInlineError] = useState("");
@@ -209,7 +210,11 @@ export function TaskListPanel({
             tabIndex={editing ? undefined : 0}
             aria-label={editing ? undefined : `编辑任务 ${task.title}`}
             className={`task-row ${editing ? "editing" : ""} ${activeTaskId === task.id ? "active" : ""} ${task.status === 2 ? "completed" : ""}`}
-            style={editing ? undefined : { cursor: "default" }}
+            style={
+              editing
+                ? undefined
+                : { cursor: hoveredCheckboxTaskId === task.id ? "pointer" : "default" }
+            }
             onClick={() => {
               if (!editing) {
                 beginEditing(task);
@@ -232,6 +237,14 @@ export function TaskListPanel({
                   task.priority > 0 ? `has-priority priority-${task.priority}` : ""
                 } ${task.status === 2 ? "checked" : ""}`}
                 style={{ cursor: "pointer" }}
+                onPointerEnter={() => setHoveredCheckboxTaskId(task.id)}
+                onPointerLeave={() =>
+                  setHoveredCheckboxTaskId((current) => (current === task.id ? undefined : current))
+                }
+                onMouseEnter={() => setHoveredCheckboxTaskId(task.id)}
+                onMouseLeave={() =>
+                  setHoveredCheckboxTaskId((current) => (current === task.id ? undefined : current))
+                }
                 onClick={(event) => {
                   event.stopPropagation();
                 }}

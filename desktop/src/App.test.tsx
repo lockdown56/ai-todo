@@ -298,7 +298,7 @@ describe("AI 清单 app", () => {
     expect(screen.getAllByText("工作清单任务").length).toBeGreaterThan(0);
   });
 
-  it("uses the pointer cursor only on task checkboxes", async () => {
+  it("uses the pointer cursor while hovering task checkboxes", async () => {
     renderApp();
 
     const title = await screen.findByText("编写测试");
@@ -308,6 +308,18 @@ describe("AI 清单 app", () => {
     expect(row).not.toBeNull();
     expect(row).toHaveStyle({ cursor: "default" });
     expect(checkbox).toHaveStyle({ cursor: "pointer" });
+
+    fireEvent.pointerEnter(checkbox);
+    expect(row).toHaveStyle({ cursor: "pointer" });
+
+    fireEvent.pointerLeave(checkbox);
+    expect(row).toHaveStyle({ cursor: "default" });
+
+    fireEvent.mouseEnter(checkbox);
+    expect(row).toHaveStyle({ cursor: "pointer" });
+
+    fireEvent.mouseLeave(checkbox);
+    expect(row).toHaveStyle({ cursor: "default" });
   });
 
   it("defines hover affordance for task checkboxes", () => {
