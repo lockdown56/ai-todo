@@ -40,7 +40,7 @@ interface EditorHandle {
   flush: () => Promise<boolean>;
 }
 
-const COMPLETED_TASK_REMOVAL_DELAY_MS = 500;
+const COMPLETED_TASK_REMOVAL_DELAY_MS = 200;
 
 export function useTaskWorkspace() {
   const navigate = useNavigate();
