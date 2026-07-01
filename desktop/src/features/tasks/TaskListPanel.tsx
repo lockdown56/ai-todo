@@ -206,10 +206,10 @@ export function TaskListPanel({
       <ContextMenu key={task.id}>
         <ContextMenuTrigger asChild>
           <div
-            role={editing ? undefined : "button"}
             tabIndex={editing ? undefined : 0}
             aria-label={editing ? undefined : `编辑任务 ${task.title}`}
             className={`task-row ${editing ? "editing" : ""} ${activeTaskId === task.id ? "active" : ""} ${task.status === 2 ? "completed" : ""}`}
+            style={editing ? undefined : { cursor: "default" }}
             onClick={() => {
               if (!editing) {
                 beginEditing(task);
@@ -231,6 +231,7 @@ export function TaskListPanel({
                 className={`checkbox task-checkbox ${
                   task.priority > 0 ? `has-priority priority-${task.priority}` : ""
                 } ${task.status === 2 ? "checked" : ""}`}
+                style={{ cursor: "pointer" }}
                 onClick={(event) => {
                   event.stopPropagation();
                 }}

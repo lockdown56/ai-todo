@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -295,6 +296,28 @@ describe("AI 清单 app", () => {
       true,
     );
     expect(screen.getAllByText("工作清单任务").length).toBeGreaterThan(0);
+  });
+
+  it("uses the pointer cursor only on task checkboxes", async () => {
+    renderApp();
+
+    const title = await screen.findByText("编写测试");
+    const row = title.closest<HTMLElement>(".task-row");
+    const checkbox = await screen.findByRole("checkbox", { name: "完成任务" });
+
+    expect(row).not.toBeNull();
+    expect(row).toHaveStyle({ cursor: "default" });
+    expect(checkbox).toHaveStyle({ cursor: "pointer" });
+  });
+
+  it("defines hover affordance for task checkboxes", () => {
+    const desktopCss = readFileSync(`${process.cwd()}/src/styles/desktop.css`, "utf8");
+
+    expect(desktopCss).toContain(".task-checkbox:hover");
+    expect(desktopCss).toContain("border-color: var(--checkbox-accent)");
+    expect(desktopCss).toContain("background: var(--checkbox-hover-background)");
+    expect(desktopCss).toContain("box-shadow: 0 0 0 3px var(--checkbox-hover-ring)");
+    expect(desktopCss).toContain('.task-checkbox[data-state="checked"]:hover');
   });
 
   it("keeps a completed task visible briefly before removing it from active views", async () => {

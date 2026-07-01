@@ -262,9 +262,18 @@ body {
 .task-row {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 14px; border-radius: var(--radius-md);
-  cursor: pointer; transition: background var(--transition-fast);
+  cursor: default; transition: background var(--transition-fast);
   margin-bottom: 2px;
   border: 1px solid transparent;
+}
+.task-row,
+.task-row .task-info,
+.task-row .task-title,
+.task-row .task-meta,
+.task-row .task-date,
+.task-row .tag-mini,
+.task-row .priority-dot {
+  cursor: default !important;
 }
 .task-row:hover { background: #FAF9F8; }
 .task-row.active { background: var(--color-primary-light); border-color: #E8E4F6; }
@@ -278,10 +287,20 @@ body {
   transition: all var(--transition-fast);
   font-size: 12px; color: transparent;
 }
-.cb:hover { border-color: var(--color-primary); }
+.task-row .cb {
+  cursor: pointer !important;
+}
+.cb:hover {
+  border-color: var(--color-primary);
+  background: #EEF3FA;
+  box-shadow: 0 0 0 3px rgb(79 111 174 / 16%);
+}
 .cb.checked {
   background: var(--color-primary); border-color: var(--color-primary);
   color: #fff;
+}
+.cb.checked:hover {
+  background: var(--color-primary);
 }
 
 .task-info { flex: 1; min-width: 0; }

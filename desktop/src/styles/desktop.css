@@ -968,8 +968,18 @@ body.is-list-sorting .sortable-list-item {
   border: 1px solid transparent;
   border-radius: 9px;
   outline: none;
-  cursor: pointer;
+  cursor: default;
   transition: background 140ms ease-out, border-color 140ms ease-out;
+}
+
+.task-row,
+.task-row .task-title,
+.task-row .task-meta,
+.task-row .task-date,
+.task-row .tag-mini,
+.task-row .list-tag-mini,
+.task-row .list-tag-mini * {
+  cursor: default !important;
 }
 
 .task-row:hover {
@@ -1019,10 +1029,14 @@ body.is-list-sorting .sortable-list-item {
 
 .checkbox {
   --checkbox-accent: var(--primary);
+  --checkbox-hover-background: #eef3fa;
+  --checkbox-hover-ring: rgb(79 111 174 / 16%);
   width: 18px;
   height: 18px;
   border: 2px solid #b9c2cc;
   border-radius: 5px;
+  cursor: pointer;
+  transition: border-color 140ms ease-out, background 140ms ease-out, box-shadow 140ms ease-out;
 }
 
 .checkbox[data-state="checked"] {
@@ -1032,18 +1046,39 @@ body.is-list-sorting .sortable-list-item {
 
 .task-checkbox.priority-1 {
   --checkbox-accent: #5f7fb6;
+  --checkbox-hover-background: #f0f4fa;
+  --checkbox-hover-ring: rgb(95 127 182 / 18%);
 }
 
 .task-checkbox.priority-3 {
   --checkbox-accent: #c08a32;
+  --checkbox-hover-background: #fbf5ec;
+  --checkbox-hover-ring: rgb(192 138 50 / 18%);
 }
 
 .task-checkbox.priority-5 {
   --checkbox-accent: #b5453f;
+  --checkbox-hover-background: #fbefef;
+  --checkbox-hover-ring: rgb(181 69 63 / 18%);
 }
 
 .task-checkbox.has-priority {
   border-color: var(--checkbox-accent);
+}
+
+.task-checkbox:hover {
+  border-color: var(--checkbox-accent);
+  background: var(--checkbox-hover-background);
+  box-shadow: 0 0 0 3px var(--checkbox-hover-ring);
+}
+
+.task-checkbox[data-state="checked"]:hover {
+  background: var(--checkbox-accent);
+}
+
+.task-row .task-checkbox,
+.task-row .task-checkbox * {
+  cursor: pointer !important;
 }
 
 .task-title {
@@ -1074,6 +1109,8 @@ body.is-list-sorting .sortable-list-item {
 
 .task-row.completed .task-checkbox {
   --checkbox-accent: var(--task-completed);
+  --checkbox-hover-background: #f2f4f6;
+  --checkbox-hover-ring: rgb(155 164 175 / 18%);
   border-color: #c5ccd4;
 }
 
@@ -1096,6 +1133,7 @@ body.is-list-sorting .sortable-list-item {
   flex: 0 0 auto;
   opacity: 0.5;
   color: var(--muted-foreground);
+  cursor: pointer;
   transition: opacity 120ms ease-out, background 120ms ease-out;
 }
 
