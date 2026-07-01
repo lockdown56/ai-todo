@@ -960,6 +960,23 @@ describe("AI 清单 app", () => {
     expect(screen.queryByRole("dialog", { name: "新建任务" })).not.toBeInTheDocument();
   });
 
+  it("adds a mobile task to the current list without opening details", async () => {
+    setWindowWidth(390);
+    const user = userEvent.setup();
+    renderApp();
+
+    await screen.findByText("编写测试");
+    await user.click(screen.getByRole("button", { name: "新建任务" }));
+    await user.type(screen.getByRole("textbox", { name: "新任务标题" }), "移动端列表任务");
+    await user.click(screen.getByRole("button", { name: "创建任务" }));
+
+    expect(await screen.findByText("移动端列表任务")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "新建任务" })).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText("任务详情")).not.toBeInTheDocument();
+  });
+
   it("opens the more drawer from the top-left trigger on mobile", async () => {
     setWindowWidth(390);
     const user = userEvent.setup();

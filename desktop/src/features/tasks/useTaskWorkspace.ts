@@ -21,6 +21,7 @@ import {
   invalidateTaskData,
   updateTaskListCache,
   insertTaskAfter,
+  insertTaskIntoListCache,
   removeTaskFromCache,
 } from "@/lib/query-utils";
 import {
@@ -30,6 +31,7 @@ import {
   setSelectedTaskId,
   setTaskSort,
 } from "@/lib/workspace-preferences";
+import { isSameLocalDay } from "@/lib/date-utils";
 
 interface Scope {
   view?: TaskView;
@@ -39,6 +41,8 @@ interface Scope {
 interface EditorHandle {
   flush: () => Promise<boolean>;
 }
+
+type CreateTaskMutationInput = CreateTaskInput & { openAfterCreate?: boolean };
 
 const COMPLETED_TASK_REMOVAL_DELAY_MS = 200;
 
@@ -267,8 +271,33 @@ export function useTaskWorkspace() {
     navigate(location.pathname);
   }, [location.pathname, navigate, scopeKey]);
 
+  const createdTaskMatchesCurrentView = useCallback(
+    (task: Task) => {
+      const cleanedSearch = debouncedSearch.trim().toLowerCase();
+      if (
+        cleanedSearch &&
+        !`${task.title} ${task.description}`.toLowerCase().includes(cleanedSearch)
+      ) {
+        return false;
+      }
+
+      if (scope.listId) {
+        return task.deleted_at === null && task.status === 0 && task.list_id === scope.listId;
+      }
+      if (scope.view === "trash") return task.deleted_at !== null;
+      if (scope.view === "completed") return task.deleted_at === null && task.status === 2;
+      if (task.deleted_at !== null || task.status !== 0) return false;
+      if (scope.view === "inbox") return Boolean(listScopeId) && task.list_id === listScopeId;
+      if (scope.view === "today") {
+        return task.due_at !== null && isSameLocalDay(new Date(task.due_at), new Date());
+      }
+      return true;
+    },
+    [debouncedSearch, listScopeId, scope.listId, scope.view],
+  );
+
   const createTask = useMutation({
-    mutationFn: (input: CreateTaskInput) => {
+    mutationFn: ({ openAfterCreate: _openAfterCreate, ...input }: CreateTaskMutationInput) => {
       const defaultListId = scope.listId
         || lists.data?.find((item) => item.system_type === "inbox")?.id;
       return api.createTask({
@@ -276,8 +305,18 @@ export function useTaskWorkspace() {
         ...(!input.list_id && defaultListId ? { list_id: defaultListId } : {}),
       });
     },
-    onSuccess: (task) => {
+    onSuccess: (task, input) => {
+      queryClient.setQueryData(queryKeys.task(task.id), task);
+      if (createdTaskMatchesCurrentView(task)) {
+        insertTaskIntoListCache(
+          queryClient,
+          queryKeys.tasks(scopeKey, debouncedSearch, sort),
+          task,
+          sort,
+        );
+      }
       invalidateTaskData(queryClient, task.id);
+      if (input.openAfterCreate === false) return;
       void openTask(task.id);
     },
   });
