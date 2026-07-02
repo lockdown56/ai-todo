@@ -56,6 +56,26 @@ describe("AI 清单 app", () => {
 
     expect(await screen.findByRole("heading", { name: "收集箱" })).toBeInTheDocument();
     expect(localStorage.getItem("todolist-access-token")).toBe("test-access-token");
+    expect(localStorage.getItem("todolist-refresh-token")).toBe("test-refresh-token");
+  });
+
+  it("refreshes an expired access token before loading the workspace", async () => {
+    localStorage.setItem("todolist-access-expires-at", "2026-06-18T08:00:00Z");
+    renderApp();
+
+    expect(await screen.findByRole("heading", { name: "收集箱" })).toBeInTheDocument();
+    expect(localStorage.getItem("todolist-access-token")).toBe("test-access-token-2");
+    expect(localStorage.getItem("todolist-refresh-token")).toBe("test-refresh-token-2");
+  });
+
+  it("clears the session when refresh token rotation is rejected", async () => {
+    localStorage.setItem("todolist-access-expires-at", "2026-06-18T08:00:00Z");
+    localStorage.setItem("todolist-refresh-token", "stale-refresh-token");
+    renderApp();
+
+    expect(await screen.findByRole("heading", { name: "登录 AI 清单" })).toBeInTheDocument();
+    expect(localStorage.getItem("todolist-access-token")).toBeNull();
+    expect(localStorage.getItem("todolist-refresh-token")).toBeNull();
   });
 
   it("clears the session and returns to login on an authenticated 401", async () => {
@@ -71,6 +91,7 @@ describe("AI 清单 app", () => {
 
     expect(await screen.findByRole("heading", { name: "登录 AI 清单" })).toBeInTheDocument();
     expect(localStorage.getItem("todolist-access-token")).toBeNull();
+    expect(localStorage.getItem("todolist-refresh-token")).toBeNull();
   });
 
   it("opens the personal center and logs out completely", async () => {
@@ -86,6 +107,7 @@ describe("AI 清单 app", () => {
 
     expect(await screen.findByRole("heading", { name: "登录 AI 清单" })).toBeInTheDocument();
     expect(localStorage.getItem("todolist-access-token")).toBeNull();
+    expect(localStorage.getItem("todolist-refresh-token")).toBeNull();
     expect(localStorage.getItem("todolist-auth-user")).toBeNull();
   });
 
@@ -877,6 +899,7 @@ describe("AI 清单 app", () => {
     expect(localStorage.getItem("ai-api-base-url")).toBe("http://127.0.0.1:9000");
     expect(await screen.findByRole("heading", { name: "登录 AI 清单" })).toBeInTheDocument();
     expect(localStorage.getItem("todolist-access-token")).toBeNull();
+    expect(localStorage.getItem("todolist-refresh-token")).toBeNull();
   });
 
   it("renders mobile bottom nav with three items at narrow width", async () => {

@@ -27,6 +27,10 @@ beforeEach(() => {
   resetMockData();
   localStorage.clear();
   localStorage.setItem("todolist-access-token", "test-access-token");
+  localStorage.setItem("todolist-refresh-token", "test-refresh-token");
+  localStorage.setItem("todolist-access-expires-at", "2099-06-18T08:00:00Z");
+  localStorage.setItem("todolist-access-expires-in", "604800");
+  localStorage.setItem("todolist-refresh-expires-at", "2099-07-18T08:00:00Z");
   localStorage.setItem(
     "todolist-auth-user",
     JSON.stringify({

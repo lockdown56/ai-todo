@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { AUTH_CHANGED_EVENT, getAccessToken } from "@/auth";
+import { AUTH_CHANGED_EVENT, getAccessToken, isAuthStorageEvent } from "@/auth";
 import { getDefaultWorkspaceRoute } from "@/lib/workspace-preferences";
 import { SessionGate } from "./SessionGate";
 import { Shell } from "./Shell";
@@ -51,7 +51,14 @@ export function AppRoutes() {
       setAuthRevision((value) => value + 1);
     };
     window.addEventListener(AUTH_CHANGED_EVENT, update);
-    return () => window.removeEventListener(AUTH_CHANGED_EVENT, update);
+    const updateFromStorage = (event: StorageEvent) => {
+      if (isAuthStorageEvent(event)) update();
+    };
+    window.addEventListener("storage", updateFromStorage);
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, update);
+      window.removeEventListener("storage", updateFromStorage);
+    };
   }, [queryClient]);
 
   return (

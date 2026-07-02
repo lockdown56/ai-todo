@@ -1,6 +1,10 @@
+import hashlib
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
+
+from app.models import RefreshToken
 
 
 @pytest.mark.asyncio
@@ -26,6 +30,8 @@ async def test_authentication_is_required_and_login_returns_current_user(client)
     payload = login.json()
     assert payload["token_type"] == "bearer"
     assert payload["expires_in"] == 604800
+    assert payload["refresh_token"].startswith("tdr_")
+    assert payload["refresh_expires_at"]
     client.headers["Authorization"] = f"Bearer {payload['access_token']}"
     me = await client.get("/api/v1/auth/me")
     assert me.status_code == 200
@@ -36,6 +42,73 @@ async def test_authentication_is_required_and_login_returns_current_user(client)
     assert malformed.status_code == 401
     assert malformed.json()["error"]["code"] == "INVALID_TOKEN"
     client.headers["Authorization"] = authorization
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_rotation_and_logout(client):
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": "change-me"},
+    )
+    refresh_token = login.json()["refresh_token"]
+
+    refreshed = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+    assert refreshed.status_code == 200
+    refreshed_body = refreshed.json()
+    assert refreshed_body["refresh_token"].startswith("tdr_")
+    assert refreshed_body["refresh_token"] != refresh_token
+
+    client.headers["Authorization"] = f"Bearer {refreshed_body['access_token']}"
+    me = await client.get("/api/v1/auth/me")
+    assert me.status_code == 200
+
+    reused = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+    assert reused.status_code == 401
+    assert reused.json()["error"]["code"] == "REFRESH_TOKEN_INVALID"
+
+    logout = await client.post(
+        "/api/v1/auth/logout",
+        json={"refresh_token": refreshed_body["refresh_token"]},
+    )
+    assert logout.status_code == 204
+
+    after_logout = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refreshed_body["refresh_token"]},
+    )
+    assert after_logout.status_code == 401
+    assert after_logout.json()["error"]["code"] == "REFRESH_TOKEN_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_expired_refresh_token_is_rejected(client, session_factory):
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": "change-me"},
+    )
+    refresh_token = login.json()["refresh_token"]
+    token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+
+    async with session_factory() as session:
+        stored = await session.scalar(
+            select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+        )
+        assert stored is not None
+        stored.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+
+    expired = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+    assert expired.status_code == 401
+    assert expired.json()["error"]["code"] == "REFRESH_TOKEN_EXPIRED"
 
 
 async def get_inbox(client):
@@ -501,8 +574,6 @@ async def test_api_key_routes_reject_api_key_credential(client):
 
 @pytest.mark.asyncio
 async def test_api_key_delete_missing_returns_404(client):
-    missing = await client.delete(
-        "/api/v1/api-keys/00000000-0000-4000-8000-0000000000ff"
-    )
+    missing = await client.delete("/api/v1/api-keys/00000000-0000-4000-8000-0000000000ff")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "API_KEY_NOT_FOUND"

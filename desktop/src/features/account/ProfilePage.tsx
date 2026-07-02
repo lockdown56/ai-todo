@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, UserRound } from "lucide-react";
 import { clearAuthSession, getStoredUser, notifyAuthChanged } from "@/auth";
+import { api } from "@/api";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ApiKeyPanel } from "./ApiKeyPanel";
 
@@ -12,11 +13,17 @@ export function ProfilePage() {
   const queryClient = useQueryClient();
   const user = getStoredUser();
 
-  const logout = () => {
-    clearAuthSession();
-    queryClient.clear();
-    notifyAuthChanged();
-    navigate("/login", { replace: true });
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Local logout should still succeed when the API is unreachable.
+    } finally {
+      clearAuthSession();
+      queryClient.clear();
+      notifyAuthChanged();
+      navigate("/login", { replace: true });
+    }
   };
 
   if (!user) return <LoadingScreen />;
@@ -66,7 +73,7 @@ export function ProfilePage() {
           <strong>退出当前账号</strong>
           <p>退出后会清除本机保存的登录凭据，需要重新输入用户名和密码。</p>
         </div>
-        <Button type="button" variant="destructive" onClick={logout}>
+        <Button type="button" variant="destructive" onClick={() => void logout()}>
           <LogOut />
           退出登录
         </Button>
