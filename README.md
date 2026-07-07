@@ -25,6 +25,8 @@ curl http://127.0.0.1:8000/health
 
 开发环境默认登录账号为 `admin` / `change-me`。部署前必须在 `.env` 中修改
 `AUTH_PASSWORD` 和 `AUTH_JWT_SECRET`；生产环境的 JWT 密钥至少需要 32 个字符。
+登录会话使用 access token + refresh token，`AUTH_TOKEN_TTL_SECONDS` 控制 access token
+有效期，`AUTH_REFRESH_TOKEN_TTL_SECONDS` 控制 refresh token 有效期（默认 30 天）。
 
 浏览器开发模式：
 
@@ -79,6 +81,9 @@ CLI 首次使用前登录：
 todo auth login
 todo auth status
 ```
+
+CLI 自动化或长期运行场景建议使用桌面端个人中心创建的 API Key，并通过
+`TODOLIST_API_KEY` 或 `--api-key` 传入。
 
 Windows 打包：
 

@@ -26,7 +26,7 @@ export function LoginPage() {
     setMessage("");
     try {
       const response = await api.login(username.trim(), password);
-      setAuthSession(response.access_token, response.user);
+      setAuthSession(response);
       queryClient.clear();
       navigate(from === "/login" ? getDefaultWorkspaceRoute() : from, { replace: true });
     } catch (error) {

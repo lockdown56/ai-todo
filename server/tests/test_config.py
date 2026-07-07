@@ -32,3 +32,8 @@ def test_production_requires_secure_auth_settings():
         auth_jwt_secret="a-secure-random-secret-with-more-than-32-characters",
     )
     assert settings.auth_username == "admin"
+
+
+def test_auth_refresh_token_ttl_must_be_positive():
+    with pytest.raises(ValidationError):
+        Settings(auth_refresh_token_ttl_seconds=0)

@@ -16,6 +16,14 @@ class AuthLogin(BaseModel):
     password: str = Field(min_length=1, max_length=500)
 
 
+class AuthRefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=1, max_length=500)
+
+
+class AuthLogoutRequest(BaseModel):
+    refresh_token: str = Field(min_length=1, max_length=500)
+
+
 class AuthUserResponse(BaseModel):
     id: UUID
     username: str
@@ -51,6 +59,8 @@ class AuthTokenResponse(BaseModel):
     token_type: Literal["bearer"] = "bearer"
     expires_in: int
     expires_at: datetime
+    refresh_token: str
+    refresh_expires_at: datetime
     user: AuthUserResponse
 
 

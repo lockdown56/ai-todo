@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     auth_display_name: str = "默认用户"
     auth_jwt_secret: str = "development-only-change-this-secret"
     auth_token_ttl_seconds: int = 7 * 24 * 60 * 60
+    auth_refresh_token_ttl_seconds: int = 30 * 24 * 60 * 60
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -35,6 +36,8 @@ class Settings(BaseSettings):
     def validate_auth_settings(self) -> "Settings":
         if self.auth_token_ttl_seconds <= 0:
             raise ValueError("AUTH_TOKEN_TTL_SECONDS 必须大于 0")
+        if self.auth_refresh_token_ttl_seconds <= 0:
+            raise ValueError("AUTH_REFRESH_TOKEN_TTL_SECONDS 必须大于 0")
         if self.environment.lower() == "production":
             if not self.auth_password or self.auth_password == "change-me":
                 raise ValueError("生产环境必须配置安全的 AUTH_PASSWORD")

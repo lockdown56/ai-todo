@@ -47,6 +47,7 @@ class User(TimestampMixin, Base):
     list_groups: Mapped[list[ListGroup]] = relationship(back_populates="user")
     tasks: Mapped[list[Task]] = relationship(back_populates="user")
     tags: Mapped[list[Tag]] = relationship(back_populates="user")
+    refresh_tokens: Mapped[list[RefreshToken]] = relationship(back_populates="user")
 
 
 class ListGroup(TimestampMixin, Base):
@@ -190,3 +191,19 @@ class ApiKey(TimestampMixin, Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship()
+
+
+class RefreshToken(TimestampMixin, Base):
+    __tablename__ = "refresh_tokens"
+    __table_args__ = (Index("ix_refresh_tokens_user", "user_id"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    token_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    replaced_by_token_id: Mapped[UUID | None] = mapped_column(ForeignKey("refresh_tokens.id"))
+
+    user: Mapped[User] = relationship(back_populates="refresh_tokens")

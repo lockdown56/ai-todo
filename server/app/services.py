@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.constants import (
     DEFAULT_INBOX_NAME,
     DEFAULT_USER_EMAIL,
@@ -18,12 +18,14 @@ from app.constants import (
     SORT_GAP,
 )
 from app.errors import ApiError
-from app.models import ApiKey, ListGroup, Tag, Task, TaskList, User
+from app.models import ApiKey, ListGroup, RefreshToken, Tag, Task, TaskList, User
 from app.repositories import get_group, get_list, get_task, task_with_details
 from app.schemas import TaskSort, TaskView
 
 API_KEY_PREFIX = "tdl_"
 API_KEY_PREFIX_DISPLAY_LEN = 12
+REFRESH_TOKEN_PREFIX = "tdr_"
+REFRESH_TOKEN_PREFIX_DISPLAY_LEN = 12
 
 
 async def initialize_data(session: AsyncSession) -> None:
@@ -326,8 +328,12 @@ async def list_tasks(
     return tasks, next_cursor
 
 
-def _hash_api_key(raw: str) -> str:
+def _hash_secret(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _hash_api_key(raw: str) -> str:
+    return _hash_secret(raw)
 
 
 def create_api_key(session: AsyncSession, name: str) -> tuple[ApiKey, str]:
@@ -342,11 +348,68 @@ def create_api_key(session: AsyncSession, name: str) -> tuple[ApiKey, str]:
     return api_key, raw
 
 
+def _expires_at_utc(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def create_refresh_token(session: AsyncSession, settings: Settings) -> tuple[RefreshToken, str]:
+    raw = REFRESH_TOKEN_PREFIX + secrets.token_urlsafe(32)
+    refresh_token = RefreshToken(
+        user_id=DEFAULT_USER_ID,
+        token_hash=_hash_secret(raw),
+        token_prefix=raw[:REFRESH_TOKEN_PREFIX_DISPLAY_LEN],
+        expires_at=datetime.now(UTC) + timedelta(seconds=settings.auth_refresh_token_ttl_seconds),
+    )
+    session.add(refresh_token)
+    return refresh_token, raw
+
+
+async def require_refresh_token(session: AsyncSession, raw: str) -> RefreshToken:
+    if not raw.startswith(REFRESH_TOKEN_PREFIX):
+        raise ApiError(401, "REFRESH_TOKEN_INVALID", "刷新凭据无效或已失效")
+    refresh_token = await session.scalar(
+        select(RefreshToken).where(RefreshToken.token_hash == _hash_secret(raw))
+    )
+    if refresh_token is None or refresh_token.revoked_at is not None:
+        raise ApiError(401, "REFRESH_TOKEN_INVALID", "刷新凭据无效或已失效")
+    if _expires_at_utc(refresh_token.expires_at) <= datetime.now(UTC):
+        raise ApiError(401, "REFRESH_TOKEN_EXPIRED", "登录已过期，请重新登录")
+    return refresh_token
+
+
+async def rotate_refresh_token(
+    session: AsyncSession, raw: str, settings: Settings
+) -> tuple[RefreshToken, str]:
+    old_token = await require_refresh_token(session, raw)
+    new_token, new_raw = create_refresh_token(session, settings)
+    await session.flush()
+    now = datetime.now(UTC)
+    old_token.last_used_at = now
+    old_token.revoked_at = now
+    old_token.replaced_by_token_id = new_token.id
+    await session.commit()
+    await session.refresh(new_token)
+    return new_token, new_raw
+
+
+async def revoke_refresh_token(session: AsyncSession, raw: str) -> bool:
+    if not raw.startswith(REFRESH_TOKEN_PREFIX):
+        return False
+    refresh_token = await session.scalar(
+        select(RefreshToken).where(RefreshToken.token_hash == _hash_secret(raw))
+    )
+    if refresh_token is None:
+        return False
+    if refresh_token.revoked_at is None:
+        refresh_token.revoked_at = datetime.now(UTC)
+        await session.commit()
+        return True
+    return False
+
+
 async def list_api_keys(session: AsyncSession) -> list[ApiKey]:
     result = await session.scalars(
-        select(ApiKey)
-        .where(ApiKey.user_id == DEFAULT_USER_ID)
-        .order_by(ApiKey.created_at.desc())
+        select(ApiKey).where(ApiKey.user_id == DEFAULT_USER_ID).order_by(ApiKey.created_at.desc())
     )
     return list(result.all())
 

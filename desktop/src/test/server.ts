@@ -85,10 +85,14 @@ export const workListCompletedTask = makeTask({
 
 let tasks = [makeTask(), inboxCompletedTask, workListTask, workListCompletedTask];
 let nextTaskNumber = 203;
+let currentRefreshToken = "test-refresh-token";
+let nextRefreshNumber = 1;
 
 export function resetMockData() {
   tasks = [makeTask(), inboxCompletedTask, workListTask, workListCompletedTask];
   nextTaskNumber = 203;
+  currentRefreshToken = "test-refresh-token";
+  nextRefreshNumber = 1;
 }
 
 export const handlers = [
@@ -110,13 +114,49 @@ export const handlers = [
       access_token: "test-access-token",
       token_type: "bearer",
       expires_in: 604800,
-      expires_at: "2026-06-18T08:00:00Z",
+      expires_at: "2099-06-18T08:00:00Z",
+      refresh_token: "test-refresh-token",
+      refresh_expires_at: "2099-07-18T08:00:00Z",
       user: {
         id: "00000000-0000-4000-8000-000000000001",
         username: "admin",
         display_name: "默认用户",
       },
     });
+  }),
+  http.post("http://127.0.0.1:8000/api/v1/auth/refresh", async ({ request }) => {
+    const body = (await request.json()) as { refresh_token: string };
+    if (body.refresh_token !== currentRefreshToken) {
+      return HttpResponse.json(
+        {
+          error: {
+            code: "REFRESH_TOKEN_INVALID",
+            message: "刷新凭据无效或已失效",
+            fields: null,
+          },
+        },
+        { status: 401 },
+      );
+    }
+    nextRefreshNumber += 1;
+    currentRefreshToken = `test-refresh-token-${nextRefreshNumber}`;
+    return HttpResponse.json({
+      access_token: `test-access-token-${nextRefreshNumber}`,
+      token_type: "bearer",
+      expires_in: 604800,
+      expires_at: "2099-06-18T08:00:00Z",
+      refresh_token: currentRefreshToken,
+      refresh_expires_at: "2099-07-18T08:00:00Z",
+      user: {
+        id: "00000000-0000-4000-8000-000000000001",
+        username: "admin",
+        display_name: "默认用户",
+      },
+    });
+  }),
+  http.post("http://127.0.0.1:8000/api/v1/auth/logout", () => {
+    currentRefreshToken = "revoked-refresh-token";
+    return new HttpResponse(null, { status: 204 });
   }),
   http.get("http://127.0.0.1:8000/api/v1/auth/me", () =>
     HttpResponse.json({

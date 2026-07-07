@@ -390,7 +390,7 @@ export function MobileShell() {
           error={createTask.error ? errorMessage(createTask.error) : null}
           onClose={() => setComposerOpen(false)}
           onCreate={(payload) =>
-            createTask.mutate(payload, {
+            createTask.mutate({ ...payload, openAfterCreate: false }, {
               onSuccess: () => setComposerOpen(false),
             })
           }

@@ -16,7 +16,13 @@ import type {
   TaskSort,
   TaskView,
 } from "./types";
-import { expireAuthSession, getAccessToken } from "./auth";
+import {
+  expireAuthSession,
+  getAccessToken,
+  getRefreshToken,
+  replaceAuthSession,
+  shouldRefreshAccessToken,
+} from "./auth";
 import { getApiBaseUrl, normalizeApiBaseUrl } from "./config";
 
 export class ApiError extends Error {
@@ -31,14 +37,23 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(
+let refreshPromise: Promise<string | null> | null = null;
+
+function requestHeaders(init: RequestInit, token: string | null): HeadersInit {
+  return {
+    Accept: "application/json",
+    ...(init.body ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...init.headers,
+  };
+}
+
+async function fetchWithTimeout(
   path: string,
   init: RequestInit = {},
-  options: { authenticated?: boolean; expireOnUnauthorized?: boolean } = {},
-): Promise<T> {
+  token: string | null = null,
+): Promise<Response> {
   const apiBaseUrl = getApiBaseUrl();
-  const authenticated = options.authenticated !== false;
-  const token = authenticated ? getAccessToken() : null;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 8000);
   let signal: AbortSignal | undefined;
@@ -49,36 +64,116 @@ async function request<T>(
     // Some test DOMs provide an AbortSignal from a different JavaScript realm.
   }
   try {
-    const response = await fetch(`${apiBaseUrl}${path}`, {
+    return await fetch(`${apiBaseUrl}${path}`, {
       ...init,
       signal,
-      headers: {
-        Accept: "application/json",
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...init.headers,
-      },
+      headers: requestHeaders(init, token),
     });
-    if (!response.ok) {
-      let payload: ApiErrorPayload | null = null;
-      try {
-        payload = (await response.json()) as ApiErrorPayload;
-      } catch {
-        // The fallback below keeps transport and proxy errors understandable.
-      }
-      const error = new ApiError(
-        response.status,
-        payload?.error.code || "HTTP_ERROR",
-        payload?.error.message || `请求失败 (${response.status})`,
-        payload?.error.fields,
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function responseError(response: Response): Promise<ApiError> {
+  let payload: ApiErrorPayload | null = null;
+  try {
+    payload = (await response.json()) as ApiErrorPayload;
+  } catch {
+    // The fallback below keeps transport and proxy errors understandable.
+  }
+  return new ApiError(
+    response.status,
+    payload?.error.code || "HTTP_ERROR",
+    payload?.error.message || `请求失败 (${response.status})`,
+    payload?.error.fields,
+  );
+}
+
+async function parseResponse<T>(response: Response): Promise<T> {
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+async function refreshAuthSession(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return null;
+    try {
+      const response = await fetchWithTimeout(
+        "/api/v1/auth/refresh",
+        json("POST", { refresh_token: refreshToken }),
       );
+      if (!response.ok) {
+        const error = await responseError(response);
+        if ((response.status === 401 || response.status === 403) && getRefreshToken() === refreshToken) {
+          expireAuthSession();
+        }
+        throw error;
+      }
+      const session = await parseResponse<AuthToken>(response);
+      replaceAuthSession(session);
+      return session.access_token;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      const message =
+        error instanceof DOMException && error.name === "AbortError"
+          ? "请求超时"
+          : "无法连接到服务";
+      throw new ApiError(0, "NETWORK_ERROR", message);
+    }
+  })();
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  options: { authenticated?: boolean; expireOnUnauthorized?: boolean } = {},
+): Promise<T> {
+  const authenticated = options.authenticated !== false;
+  let token = authenticated ? getAccessToken() : null;
+  if (authenticated && shouldRefreshAccessToken()) {
+    const fallbackToken = token;
+    try {
+      token = (await refreshAuthSession()) || getAccessToken() || token;
+    } catch (error) {
+      if (!getAccessToken()) throw error;
+      token = fallbackToken;
+    }
+  }
+  try {
+    let response = await fetchWithTimeout(path, init, token);
+    if (response.status === 401 && authenticated && options.expireOnUnauthorized !== false) {
+      const firstError = await responseError(response);
+      try {
+        const refreshedToken = await refreshAuthSession();
+        if (refreshedToken) {
+          response = await fetchWithTimeout(path, init, refreshedToken);
+          if (response.ok) return parseResponse<T>(response);
+          const retriedError = await responseError(response);
+          if (response.status === 401) expireAuthSession();
+          throw retriedError;
+        }
+      } catch (refreshError) {
+        expireAuthSession();
+        if (refreshError instanceof ApiError && refreshError.status === 401) throw refreshError;
+      }
+      expireAuthSession();
+      throw firstError;
+    }
+    if (!response.ok) {
+      const error = await responseError(response);
       if (response.status === 401 && options.expireOnUnauthorized !== false) {
         expireAuthSession();
       }
       throw error;
     }
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
+    return parseResponse<T>(response);
   } catch (error) {
     if (error instanceof ApiError) throw error;
     const message =
@@ -86,8 +181,6 @@ async function request<T>(
         ? "请求超时"
         : "无法连接到服务";
     throw new ApiError(0, "NETWORK_ERROR", message);
-  } finally {
-    window.clearTimeout(timeout);
   }
 }
 
@@ -130,6 +223,15 @@ export const api = {
       json("POST", { username, password }),
       { authenticated: false, expireOnUnauthorized: false },
     ),
+  logout: () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return Promise.resolve();
+    return request<void>(
+      "/api/v1/auth/logout",
+      json("POST", { refresh_token: refreshToken }),
+      { authenticated: false, expireOnUnauthorized: false },
+    );
+  },
   me: () => request<AuthUser>("/api/v1/auth/me"),
 
   lists: () => request<TaskList[]>("/api/v1/lists"),
