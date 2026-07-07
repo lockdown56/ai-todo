@@ -306,7 +306,7 @@ export function DesktopShell() {
                 refreshPending={isRefreshing}
                 onSearch={setSearch}
                 onSort={setSort}
-                onCreate={(payload) => createTask.mutate(payload)}
+                onCreate={(payload) => createTask.mutate(payload, { onSuccess: (task) => openTask(task.id) })}
                 onRefresh={refreshWorkspaceData}
               />
               {scope.view === "trash" && (trashLists.data?.length || 0) > 0 && (

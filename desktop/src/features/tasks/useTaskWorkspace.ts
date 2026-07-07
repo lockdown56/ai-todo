@@ -278,7 +278,6 @@ export function useTaskWorkspace() {
     },
     onSuccess: (task) => {
       invalidateTaskData(queryClient, task.id);
-      void openTask(task.id);
     },
   });
 
