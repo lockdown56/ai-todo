@@ -73,10 +73,9 @@ pub fn setup_tray(app: &mut App) -> tauri::Result<()> {
     let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
-    let Some(icon) = app.default_window_icon().cloned() else {
-        eprintln!("Skipping tray setup: missing default window icon");
-        return Ok(());
-    };
+    // The application icon contains details intended for large surfaces. Use an
+    // optically simplified member of the same icon family in the system tray.
+    let icon = tauri::include_image!("icons/tray-icon.png");
 
     if let Err(error) = TrayIconBuilder::with_id("main")
         .icon(icon)
