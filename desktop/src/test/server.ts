@@ -55,6 +55,15 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
     checklist_items: [],
     created_at: now,
     updated_at: now,
+    recurrence_type: null,
+    recurrence_start_date: null,
+    recurrence_end_date: null,
+    recurrence_weekday: null,
+    recurrence_monthday: null,
+    reminder_offset_minutes: null,
+    source_task_id: null,
+    occurrence_date: null,
+    is_recurring_occurrence: false,
     ...overrides,
   };
 }

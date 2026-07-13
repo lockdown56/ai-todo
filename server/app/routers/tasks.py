@@ -1,19 +1,24 @@
 from datetime import UTC, datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.config import get_settings
 from app.constants import DEFAULT_USER_ID
 from app.database import get_session
 from app.errors import ApiError
-from app.models import ChecklistItem, Task
+from app.models import ChecklistItem, Task, TaskOccurrence
 from app.repositories import next_sort_order
 from app.schemas import TaskCreate, TaskPage, TaskResponse, TaskSort, TaskUpdate, TaskView
 from app.services import (
     delete_task,
     get_inbox,
     list_tasks,
+    recurrence_occurs_on,
     require_list,
     require_tags,
     require_task,
@@ -51,11 +56,68 @@ async def get_tasks(
         limit=limit,
         cursor=cursor,
     )
-    return TaskPage(items=tasks, next_cursor=next_cursor)
+    items = [TaskResponse.model_validate(task) for task in tasks]
+    if view == "completed" or (list_id is not None and status == 2):
+        occurrence_query = (
+            select(TaskOccurrence)
+            .join(Task)
+            .options(
+                selectinload(TaskOccurrence.task).selectinload(Task.tags),
+                selectinload(TaskOccurrence.task).selectinload(Task.checklist_items),
+            )
+            .where(Task.user_id == DEFAULT_USER_ID)
+            .order_by(TaskOccurrence.completed_at.desc())
+            .limit(limit)
+        )
+        if list_id is not None:
+            occurrence_query = occurrence_query.where(Task.list_id == list_id)
+        occurrences = list(await session.scalars(occurrence_query))
+        for occurrence in occurrences:
+            response = TaskResponse.model_validate(occurrence.task).model_copy(
+                update={
+                    "id": occurrence.id,
+                    "status": 2,
+                    "completed_at": occurrence.completed_at,
+                    "source_task_id": occurrence.task_id,
+                    "occurrence_date": occurrence.occurrence_date,
+                    "is_recurring_occurrence": True,
+                    "title": occurrence.snapshot.get("title", occurrence.task.title),
+                    "description": occurrence.snapshot.get(
+                        "description", occurrence.task.description
+                    ),
+                    "priority": occurrence.snapshot.get("priority", occurrence.task.priority),
+                }
+            )
+            items.append(response)
+        items.sort(key=lambda item: item.completed_at or item.created_at, reverse=True)
+        items = items[:limit]
+    return TaskPage(items=items, next_cursor=next_cursor)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task_detail(task_id: UUID, session: AsyncSession = Depends(get_session)):
+    occurrence = await session.scalar(
+        select(TaskOccurrence)
+        .options(
+            selectinload(TaskOccurrence.task).selectinload(Task.tags),
+            selectinload(TaskOccurrence.task).selectinload(Task.checklist_items),
+        )
+        .where(TaskOccurrence.id == task_id)
+    )
+    if occurrence is not None:
+        return TaskResponse.model_validate(occurrence.task).model_copy(
+            update={
+                "id": occurrence.id,
+                "status": 2,
+                "completed_at": occurrence.completed_at,
+                "source_task_id": occurrence.task_id,
+                "occurrence_date": occurrence.occurrence_date,
+                "is_recurring_occurrence": True,
+                "title": occurrence.snapshot.get("title", occurrence.task.title),
+                "description": occurrence.snapshot.get("description", occurrence.task.description),
+                "priority": occurrence.snapshot.get("priority", occurrence.task.priority),
+            }
+        )
     return await require_task(session, task_id, include_deleted=True)
 
 
@@ -76,6 +138,12 @@ async def create_task(payload: TaskCreate, session: AsyncSession = Depends(get_s
         due_at=payload.due_at,
         is_all_day=payload.is_all_day or False,
         reminder_at=payload.reminder_at,
+        recurrence_type=payload.recurrence_type,
+        recurrence_start_date=payload.recurrence_start_date,
+        recurrence_end_date=payload.recurrence_end_date,
+        recurrence_weekday=payload.recurrence_weekday,
+        recurrence_monthday=payload.recurrence_monthday,
+        reminder_offset_minutes=payload.reminder_offset_minutes,
         priority=payload.priority or 0,
         sort_order=(
             payload.sort_order
@@ -134,6 +202,37 @@ async def remove_task(task_id: UUID, session: AsyncSession = Depends(get_session
 @router.post("/{task_id}/complete", response_model=TaskResponse)
 async def complete_task(task_id: UUID, session: AsyncSession = Depends(get_session)):
     task = await require_task(session, task_id)
+    if task.recurrence_type:
+        timezone = ZoneInfo(get_settings().app_timezone)
+        today = datetime.now(timezone).date()
+        if not recurrence_occurs_on(task, today):
+            raise ApiError(409, "RECURRENCE_NOT_DUE", "循环任务今天无需执行")
+        existing = await session.scalar(
+            select(TaskOccurrence).where(
+                TaskOccurrence.task_id == task.id, TaskOccurrence.occurrence_date == today
+            )
+        )
+        if existing is None:
+            snapshot = {
+                "title": task.title,
+                "description": task.description,
+                "priority": task.priority,
+                "checklist_items": [
+                    {"title": item.title, "is_completed": item.is_completed}
+                    for item in task.checklist_items
+                ],
+                "tags": [{"name": tag.name, "color": tag.color} for tag in task.tags],
+            }
+            session.add(
+                TaskOccurrence(
+                    task_id=task.id,
+                    occurrence_date=today,
+                    completed_at=datetime.now(UTC),
+                    snapshot=snapshot,
+                )
+            )
+            await session.commit()
+        return await require_task(session, task.id)
     if task.status != 2:
         task.status = 2
         task.completed_at = datetime.now(UTC)
@@ -143,6 +242,12 @@ async def complete_task(task_id: UUID, session: AsyncSession = Depends(get_sessi
 
 @router.post("/{task_id}/reopen", response_model=TaskResponse)
 async def reopen_task(task_id: UUID, session: AsyncSession = Depends(get_session)):
+    occurrence = await session.get(TaskOccurrence, task_id)
+    if occurrence is not None:
+        source_id = occurrence.task_id
+        await session.delete(occurrence)
+        await session.commit()
+        return await require_task(session, source_id)
     task = await require_task(session, task_id)
     if task.status != 0:
         task.status = 0

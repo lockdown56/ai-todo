@@ -379,8 +379,11 @@ export function useTaskWorkspace() {
       queryClient.setQueryData(queryKeys.task(task.id), previousTask);
     },
     onSuccess: (task, { action }) => {
-      updateTaskListCache(queryClient, task.id, task);
-      queryClient.setQueryData(queryKeys.task(task.id), task);
+      const isRecurringCompletion = action === "complete" && Boolean(task.recurrence_type);
+      if (!isRecurringCompletion) {
+        updateTaskListCache(queryClient, task.id, task);
+        queryClient.setQueryData(queryKeys.task(task.id), task);
+      }
       if (action === "complete") {
         const timer = window.setTimeout(() => {
           completedRemovalTimersRef.current.delete(timer);

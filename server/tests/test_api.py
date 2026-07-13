@@ -331,6 +331,37 @@ async def test_task_views_search_sort_and_state_transitions(client):
 
 
 @pytest.mark.asyncio
+async def test_daily_recurring_task_completes_only_current_occurrence(client):
+    today = datetime.now(UTC).date()
+    created = await client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "每日复盘",
+            "due_at": datetime.now(UTC).isoformat(),
+            "is_all_day": True,
+            "recurrence_type": "daily",
+            "recurrence_start_date": today.isoformat(),
+        },
+    )
+    assert created.status_code == 201
+    task_id = created.json()["id"]
+
+    completed = await client.post(f"/api/v1/tasks/{task_id}/complete")
+    assert completed.status_code == 200
+    assert completed.json()["status"] == 0
+    assert (await client.post(f"/api/v1/tasks/{task_id}/complete")).status_code == 200
+
+    today_tasks = await client.get("/api/v1/tasks", params={"view": "today"})
+    assert task_id not in {item["id"] for item in today_tasks.json()["items"]}
+
+    history = await client.get("/api/v1/tasks", params={"view": "completed"})
+    occurrences = [item for item in history.json()["items"] if item["source_task_id"] == task_id]
+    assert len(occurrences) == 1
+    assert occurrences[0]["occurrence_date"] == today.isoformat()
+    assert occurrences[0]["is_recurring_occurrence"] is True
+
+
+@pytest.mark.asyncio
 async def test_task_can_be_created_empty_at_a_specific_sort_position(client):
     created = await client.post(
         "/api/v1/tasks",

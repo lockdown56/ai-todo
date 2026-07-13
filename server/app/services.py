@@ -1,8 +1,9 @@
 import base64
+import calendar
 import hashlib
 import json
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -18,7 +19,7 @@ from app.constants import (
     SORT_GAP,
 )
 from app.errors import ApiError
-from app.models import ApiKey, ListGroup, RefreshToken, Tag, Task, TaskList, User
+from app.models import ApiKey, ListGroup, RefreshToken, Tag, Task, TaskList, TaskOccurrence, User
 from app.repositories import get_group, get_list, get_task, task_with_details
 from app.schemas import TaskSort, TaskView
 
@@ -26,6 +27,30 @@ API_KEY_PREFIX = "tdl_"
 API_KEY_PREFIX_DISPLAY_LEN = 12
 REFRESH_TOKEN_PREFIX = "tdr_"
 REFRESH_TOKEN_PREFIX_DISPLAY_LEN = 12
+
+
+def recurrence_occurs_on(task: Task, day: date) -> bool:
+    kind = task.recurrence_type
+    start = task.recurrence_start_date
+    if (
+        not kind
+        or not start
+        or day < start
+        or (task.recurrence_end_date and day > task.recurrence_end_date)
+    ):
+        return False
+    if kind == "daily":
+        return True
+    if kind == "weekdays":
+        return day.weekday() < 5
+    if kind == "weekly":
+        return day.weekday() == task.recurrence_weekday
+    if kind == "monthly":
+        target = min(
+            task.recurrence_monthday or start.day, calendar.monthrange(day.year, day.month)[1]
+        )
+        return day.day == target
+    return False
 
 
 async def initialize_data(session: AsyncSession) -> None:
@@ -312,7 +337,11 @@ async def list_tasks(
             local_now = datetime.now(timezone)
             start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
             end = start + timedelta(days=1)
-            query = query.where(Task.due_at >= start, Task.due_at < end)
+            query = query.where(
+                or_(
+                    and_(Task.due_at >= start, Task.due_at < end), Task.recurrence_type.is_not(None)
+                )
+            )
 
     if query_text and (cleaned := query_text.strip()):
         pattern = f"%{cleaned}%"
@@ -320,6 +349,30 @@ async def list_tasks(
 
     query = task_sorting(query, sort, cursor).limit(limit + 1)
     tasks = list((await session.scalars(query)).unique().all())
+    timezone = ZoneInfo(get_settings().app_timezone)
+    today = datetime.now(timezone).date()
+    if view == "today":
+        tasks = [
+            task
+            for task in tasks
+            if recurrence_occurs_on(task, today)
+            or (
+                task.recurrence_type is None
+                and task.due_at is not None
+                and task.due_at.astimezone(timezone).date() == today
+            )
+        ]
+    recurring_ids = [task.id for task in tasks if task.recurrence_type]
+    if recurring_ids and status == 0:
+        completed_ids = set(
+            await session.scalars(
+                select(TaskOccurrence.task_id).where(
+                    TaskOccurrence.task_id.in_(recurring_ids),
+                    TaskOccurrence.occurrence_date == today,
+                )
+            )
+        )
+        tasks = [task for task in tasks if task.id not in completed_ids]
     has_more = len(tasks) > limit
     tasks = tasks[:limit]
     next_cursor = (

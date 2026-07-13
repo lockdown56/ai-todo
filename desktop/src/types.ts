@@ -87,6 +87,15 @@ export interface Task {
   checklist_items: ChecklistItem[];
   created_at: string;
   updated_at: string;
+  recurrence_type: "daily" | "weekdays" | "weekly" | "monthly" | null;
+  recurrence_start_date: string | null;
+  recurrence_end_date: string | null;
+  recurrence_weekday: number | null;
+  recurrence_monthday: number | null;
+  reminder_offset_minutes: number | null;
+  source_task_id: string | null;
+  occurrence_date: string | null;
+  is_recurring_occurrence: boolean;
 }
 
 export interface TaskPage {
@@ -101,6 +110,12 @@ export interface CreateTaskInput {
   due_at?: string | null;
   is_all_day?: boolean;
   reminder_at?: string | null;
+  recurrence_type?: "daily" | "weekdays" | "weekly" | "monthly" | null;
+  recurrence_start_date?: string | null;
+  recurrence_end_date?: string | null;
+  recurrence_weekday?: number | null;
+  recurrence_monthday?: number | null;
+  reminder_offset_minutes?: number | null;
 }
 
 export interface ApiErrorPayload {
@@ -121,6 +136,12 @@ export type TaskPatch = Partial<{
   priority: 0 | 1 | 3 | 5;
   sort_order: number;
   tag_ids: string[];
+  recurrence_type: "daily" | "weekdays" | "weekly" | "monthly" | null;
+  recurrence_start_date: string | null;
+  recurrence_end_date: string | null;
+  recurrence_weekday: number | null;
+  recurrence_monthday: number | null;
+  reminder_offset_minutes: number | null;
 }>;
 
 export interface ApiKey {

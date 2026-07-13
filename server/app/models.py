@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     SmallInteger,
     String,
     Text,
@@ -118,6 +121,12 @@ class Task(TimestampMixin, Base):
     sort_order: Mapped[int] = mapped_column(BigInteger, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deletion_batch_id: Mapped[UUID | None]
+    recurrence_type: Mapped[str | None] = mapped_column(String(20))
+    recurrence_start_date: Mapped[date | None] = mapped_column(Date)
+    recurrence_end_date: Mapped[date | None] = mapped_column(Date)
+    recurrence_weekday: Mapped[int | None] = mapped_column(SmallInteger)
+    recurrence_monthday: Mapped[int | None] = mapped_column(SmallInteger)
+    reminder_offset_minutes: Mapped[int | None] = mapped_column(Integer)
 
     user: Mapped[User] = relationship(back_populates="tasks")
     task_list: Mapped[TaskList] = relationship(back_populates="tasks")
@@ -131,6 +140,24 @@ class Task(TimestampMixin, Base):
         back_populates="tasks",
         lazy="selectin",
     )
+    occurrences: Mapped[list[TaskOccurrence]] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )
+
+
+class TaskOccurrence(Base):
+    __tablename__ = "task_occurrences"
+    __table_args__ = (UniqueConstraint("task_id", "occurrence_date"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    task_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    occurrence_date: Mapped[date] = mapped_column(Date, nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    task: Mapped[Task] = relationship(back_populates="occurrences")
 
 
 class ChecklistItem(TimestampMixin, Base):

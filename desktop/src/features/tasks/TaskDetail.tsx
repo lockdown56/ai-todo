@@ -24,6 +24,7 @@ import {
   List,
   LoaderCircle,
   Plus,
+  Repeat2,
   Star,
   Tag as TagIcon,
   X,
@@ -339,6 +340,62 @@ export const TaskDetail = forwardRef<EditorHandle, {
             />
             {draft.reminder_at && !readOnly && (
               <Button variant="ghost" size="icon-sm" className="icon-button" onClick={() => schedule("reminder_at", null)} aria-label="清除提醒时间"><X /></Button>
+            )}
+          </div>
+        </DetailField>
+        <DetailField label="循环" icon={<Repeat2 />}>
+          <div className="date-row">
+            <Select
+              value={draft.recurrence_type || "none"}
+              disabled={readOnly}
+              onValueChange={(value) => {
+                const kind = value === "none" ? null : value as "daily" | "weekdays" | "weekly" | "monthly";
+                const start = draft.recurrence_start_date || (draft.due_at ? draft.due_at.slice(0, 10) : new Date().toLocaleDateString("en-CA"));
+                schedule("recurrence_type", kind);
+                schedule("recurrence_start_date", kind ? start : null);
+                schedule("recurrence_weekday", kind === "weekly" ? new Date(`${start}T12:00:00`).getDay() === 0 ? 6 : new Date(`${start}T12:00:00`).getDay() - 1 : null);
+                schedule("recurrence_monthday", kind === "monthly" ? Number(start.slice(8, 10)) : null);
+              }}
+            >
+              <SelectTrigger className="detail-select" size="sm" aria-label="循环规则"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">不循环</SelectItem>
+                <SelectItem value="daily">每天</SelectItem>
+                <SelectItem value="weekdays">工作日</SelectItem>
+                <SelectItem value="weekly">每周</SelectItem>
+                <SelectItem value="monthly">每月</SelectItem>
+              </SelectContent>
+            </Select>
+            {draft.recurrence_type && (
+              <>
+                <Input type="date" aria-label="循环开始日期" value={draft.recurrence_start_date || ""} disabled={readOnly} onChange={(event) => schedule("recurrence_start_date", event.target.value)} />
+                <Input type="date" aria-label="循环结束日期" value={draft.recurrence_end_date || ""} min={draft.recurrence_start_date || undefined} disabled={readOnly} onChange={(event) => schedule("recurrence_end_date", event.target.value || null)} />
+              </>
+            )}
+            {draft.recurrence_type === "weekly" && (
+              <Select value={String(draft.recurrence_weekday ?? 0)} disabled={readOnly} onValueChange={(value) => schedule("recurrence_weekday", Number(value))}>
+                <SelectTrigger className="detail-select" size="sm" aria-label="每周执行日"><SelectValue /></SelectTrigger>
+                <SelectContent>{["周一", "周二", "周三", "周四", "周五", "周六", "周日"].map((label, index) => <SelectItem key={label} value={String(index)}>{label}</SelectItem>)}</SelectContent>
+              </Select>
+            )}
+            {draft.recurrence_type === "monthly" && (
+              <Select value={String(draft.recurrence_monthday ?? 1)} disabled={readOnly} onValueChange={(value) => schedule("recurrence_monthday", Number(value))}>
+                <SelectTrigger className="detail-select" size="sm" aria-label="每月执行日"><SelectValue /></SelectTrigger>
+                <SelectContent>{Array.from({ length: 31 }, (_, index) => index + 1).map((day) => <SelectItem key={day} value={String(day)}>每月 {day} 日</SelectItem>)}</SelectContent>
+              </Select>
+            )}
+            {draft.recurrence_type && !draft.is_all_day && (
+              <Select value={String(draft.reminder_offset_minutes ?? -1)} disabled={readOnly} onValueChange={(value) => schedule("reminder_offset_minutes", Number(value) < 0 ? null : Number(value))}>
+                <SelectTrigger className="detail-select" size="sm" aria-label="循环提醒"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="-1">不重复提醒</SelectItem>
+                  <SelectItem value="0">到期时提醒</SelectItem>
+                  <SelectItem value="10">提前 10 分钟</SelectItem>
+                  <SelectItem value="30">提前 30 分钟</SelectItem>
+                  <SelectItem value="60">提前 1 小时</SelectItem>
+                  <SelectItem value="1440">提前 1 天</SelectItem>
+                </SelectContent>
+              </Select>
             )}
           </div>
         </DetailField>

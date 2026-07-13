@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -218,6 +218,12 @@ class TaskFields(BaseModel):
     priority: Literal[0, 1, 3, 5] | None = None
     sort_order: int | None = None
     tag_ids: list[UUID] | None = None
+    recurrence_type: Literal["daily", "weekdays", "weekly", "monthly"] | None = None
+    recurrence_start_date: date | None = None
+    recurrence_end_date: date | None = None
+    recurrence_weekday: int | None = Field(default=None, ge=0, le=6)
+    recurrence_monthday: int | None = Field(default=None, ge=1, le=31)
+    reminder_offset_minutes: int | None = Field(default=None, ge=0)
 
     @field_validator("title")
     @classmethod
@@ -230,6 +236,18 @@ class TaskFields(BaseModel):
             raise ValueError("提醒时间不得晚于截止时间")
         if self.reminder_at and self.due_at is None and "due_at" in self.model_fields_set:
             raise ValueError("设置提醒时间前必须先设置截止时间")
+        if (
+            self.recurrence_end_date
+            and self.recurrence_start_date
+            and self.recurrence_end_date < self.recurrence_start_date
+        ):
+            raise ValueError("循环结束日期不得早于开始日期")
+        if self.recurrence_type and not self.recurrence_start_date:
+            raise ValueError("循环任务必须设置开始日期")
+        if self.recurrence_type == "weekly" and self.recurrence_weekday is None:
+            raise ValueError("每周循环必须指定星期")
+        if self.recurrence_type == "monthly" and self.recurrence_monthday is None:
+            raise ValueError("每月循环必须指定日期")
         return self
 
 
@@ -260,6 +278,15 @@ class TaskResponse(ApiModel):
     checklist_items: list[ChecklistResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    recurrence_type: str | None = None
+    recurrence_start_date: date | None = None
+    recurrence_end_date: date | None = None
+    recurrence_weekday: int | None = None
+    recurrence_monthday: int | None = None
+    reminder_offset_minutes: int | None = None
+    source_task_id: UUID | None = None
+    occurrence_date: date | None = None
+    is_recurring_occurrence: bool = False
 
 
 class TaskPage(BaseModel):

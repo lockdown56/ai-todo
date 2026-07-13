@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Archive, CircleAlert, LoaderCircle, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, CircleAlert, LoaderCircle, MoreHorizontal, Repeat2, RotateCcw, Trash2 } from "lucide-react";
 import { errorMessage } from "@/lib/error-utils";
 import { formatDue, dueDateTone } from "@/lib/date-utils";
 import type { Task, TaskList, TaskView } from "@/types";
@@ -284,7 +284,7 @@ export function TaskListPanel({
             ) : (
               <span className="task-title">{task.title}</span>
             )}
-            {(task.due_at || (!editing && task.tags.length > 0) || showListTag) && (
+            {(task.due_at || task.recurrence_type || (!editing && task.tags.length > 0) || showListTag) && (
               <span className="task-meta">
                 {showListTag && owningList && (
                   <span className="list-tag-mini">
@@ -294,6 +294,9 @@ export function TaskListPanel({
                 )}
                 {task.due_at && (
                   <span className={`task-date ${dueDateTone(task)}`}>{formatDue(task)}</span>
+                )}
+                {task.recurrence_type && (
+                  <span className="task-date"><Repeat2 size={13} /> {{ daily: "每天", weekdays: "工作日", weekly: "每周", monthly: "每月" }[task.recurrence_type]}</span>
                 )}
                 {!editing && task.tags.slice(0, 2).map((tag) => (
                   <span className="tag-mini" key={tag.id}>{tag.name}</span>
