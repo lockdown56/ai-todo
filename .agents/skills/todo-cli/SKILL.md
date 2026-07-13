@@ -1,5 +1,5 @@
 ---
-name: todolist-cli
+name: todo-cli
 description: >
   AI 清单 CLI 操作技能。使用 `todo` 命令管理任务、清单、标签和检查项。
   当用户需要创建/查询/更新/删除任务、管理清单、标签、检查项、
