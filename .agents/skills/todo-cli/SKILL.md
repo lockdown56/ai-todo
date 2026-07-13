@@ -37,6 +37,8 @@ todo [全局选项] <资源> <命令> [参数]
 ## 核心命令速查
 
 登录会话会自动使用 refresh token 续期；`todo auth logout` 会撤销服务端会话。
+API Key 可用 `todo auth login --api-key tdl_xxx` 验证并按 API 地址保存；API Key 登出只删除
+本地凭据，不会吊销服务端 Key。
 
 ### 任务 (task)
 

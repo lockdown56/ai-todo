@@ -143,6 +143,119 @@ def test_auth_login_saves_refresh_session(monkeypatch, tmp_path):
     session = get_session("http://127.0.0.1:8000")
     assert session["refresh_token"] == "refresh"
     assert session["refresh_expires_at"] == "2026-08-13T00:00:00Z"
+    assert session["credential_type"] == "jwt"
+
+
+def test_auth_login_with_api_key_validates_and_saves_credential(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    fake = _mock_client()
+    fake.get.return_value = {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "username": "admin",
+        "display_name": "管理员",
+    }
+
+    with patch("app.cli.main.ApiClient", return_value=fake) as client_class:
+        result = runner.invoke(app, ["auth", "login", "--api-key", "tdl_secretvalue"])
+
+    assert result.exit_code == 0
+    client_class.assert_called_once_with(
+        "http://127.0.0.1:8000",
+        8.0,
+        "tdl_secretvalue",
+        auth_hint=False,
+    )
+    fake.get.assert_called_once_with("/api/v1/auth/me")
+    session = get_session("http://127.0.0.1:8000")
+    assert session == {
+        "credential_type": "api_key",
+        "api_key": "tdl_secretvalue",
+        "user": fake.get.return_value,
+        "expires_at": None,
+    }
+    payload = json.loads(result.stdout)["data"]
+    assert payload["credential_type"] == "api_key"
+    assert "api_key" not in payload
+
+
+def test_saved_api_key_is_used_by_following_commands(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    save_session(
+        "http://127.0.0.1:8000",
+        {
+            "credential_type": "api_key",
+            "api_key": "tdl_savedkey",
+            "user": {"username": "admin"},
+            "expires_at": None,
+        },
+    )
+    captured = {}
+
+    def capture_make_client(ctx):
+        from app.cli.main import _get_token
+
+        captured["token"] = _get_token(ctx)
+        fake = _mock_client()
+        fake.get.return_value = {"items": [], "next_cursor": None}
+        return fake
+
+    with patch("app.cli.main._make_client", side_effect=capture_make_client):
+        result = runner.invoke(app, ["task", "ls"])
+
+    assert result.exit_code == 0
+    assert captured["token"] == "tdl_savedkey"
+
+
+def test_auth_status_reports_saved_api_key_login(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    save_session(
+        "http://127.0.0.1:8000",
+        {
+            "credential_type": "api_key",
+            "api_key": "tdl_savedkey",
+            "user": {"username": "admin"},
+            "expires_at": None,
+        },
+    )
+    fake = _mock_client()
+    fake.get.return_value = {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "username": "admin",
+        "display_name": "管理员",
+    }
+
+    with patch("app.cli.main.ApiClient", return_value=fake) as client_class:
+        result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0
+    client_class.assert_called_once_with(
+        "http://127.0.0.1:8000",
+        8.0,
+        "tdl_savedkey",
+    )
+    payload = json.loads(result.stdout)["data"]
+    assert payload["api_url"] == "http://127.0.0.1:8000"
+    assert payload["credential_type"] == "api_key"
+    assert payload["expires_at"] is None
+
+
+def test_auth_login_rejects_api_key_with_password_credentials():
+    result = runner.invoke(
+        app,
+        [
+            "auth",
+            "login",
+            "--api-key",
+            "tdl_secretvalue",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert json.loads(result.stderr)["error"]["code"] == "CLI_USAGE_ERROR"
 
 
 def test_auth_logout_revokes_refresh_token_before_removing_session(monkeypatch, tmp_path):
@@ -166,6 +279,27 @@ def test_auth_logout_revokes_refresh_token_before_removing_session(monkeypatch, 
 
     assert result.exit_code == 0
     fake.post.assert_called_once_with("/api/v1/auth/logout", json={"refresh_token": "refresh"})
+    assert get_session(api_url) is None
+
+
+def test_auth_logout_only_removes_saved_api_key_locally(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    api_url = "http://127.0.0.1:8000"
+    save_session(
+        api_url,
+        {
+            "credential_type": "api_key",
+            "api_key": "tdl_savedkey",
+            "user": {"username": "admin"},
+            "expires_at": None,
+        },
+    )
+
+    with patch("app.cli.main.ApiClient") as client_class:
+        result = runner.invoke(app, ["auth", "logout"])
+
+    assert result.exit_code == 0
+    client_class.assert_not_called()
     assert get_session(api_url) is None
 
 

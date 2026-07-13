@@ -48,6 +48,7 @@ todo task ls --view today --output table
 ```bash
 todo auth login                         # 交互式读取用户名和隐藏密码
 todo auth login -u admin --password SECRET
+todo auth login --api-key tdl_xxx       # 验证并保存当前 API 地址的 API Key
 todo auth status
 todo auth logout
 
@@ -56,9 +57,10 @@ todo api-key ls
 todo api-key delete API_KEY_UUID --yes
 ```
 
-登录会话按 API 地址保存在用户配置目录。访问令牌过期时，CLI 会使用轮换式 refresh token
-自动续期；`auth logout` 会先在服务端撤销 refresh token，再删除本地会话。自动化环境建议通过
-`TODOLIST_API_KEY` 或 `--api-key` 注入 API Key；创建时的明文只返回一次。
+登录凭据按 API 地址保存在用户配置目录。访问令牌过期时，CLI 会使用轮换式 refresh token
+自动续期；`auth logout` 会先在服务端撤销 refresh token，再删除本地凭据。使用 API Key 登录时，
+`auth logout` 只删除本地保存的 Key，不会吊销服务端 Key；如需吊销请执行 `todo api-key delete`。
+自动化环境也可通过 `TODOLIST_API_KEY` 或一次性 `--api-key` 注入 API Key；创建时的明文只返回一次。
 
 ## 清单与分组
 

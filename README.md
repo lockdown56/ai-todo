@@ -83,11 +83,13 @@ cargo check --manifest-path desktop/src-tauri/Cargo.toml
 curl -fsSL https://raw.githubusercontent.com/lockdown56/ai-todo/master/scripts/install.sh | bash
 todo --help
 todo auth login
+todo auth login --api-key tdl_xxx
 todo auth status
 ```
 
-CLI 自动化或长期运行场景建议使用桌面端个人中心创建的 API Key，并通过
-`TODOLIST_API_KEY` 或 `--api-key` 传入。全局参数可放在资源命令前或最终子命令后，例如
+CLI 自动化或长期运行场景建议使用桌面端个人中心创建的 API Key。可通过
+`todo auth login --api-key tdl_xxx` 按 API 地址保存，也可用 `TODOLIST_API_KEY` 或一次性
+`--api-key` 传入。全局参数可放在资源命令前或最终子命令后，例如
 `todo --output table task ls` 与 `todo task ls --output table` 等价。
 交互登录保存的会话会使用 refresh token 自动续期，`todo auth logout` 会撤销该会话。
 

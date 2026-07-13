@@ -85,16 +85,22 @@ def _get_timeout(ctx: typer.Context) -> float:
     return timeout
 
 
+def _get_explicit_api_key(ctx: typer.Context) -> str | None:
+    obj = ctx.obj or {}
+    api_key = obj.get("api_key") or os.environ.get("TODOLIST_API_KEY")
+    return api_key if isinstance(api_key, str) else None
+
+
 def _get_token(ctx: typer.Context) -> str | None:
     obj = ctx.obj or {}
     explicit = obj.get("token") or os.environ.get("TODOLIST_TOKEN")
     if explicit:
         return explicit
-    api_key = obj.get("api_key") or os.environ.get("TODOLIST_API_KEY")
+    api_key = _get_explicit_api_key(ctx)
     if api_key:
         return api_key
     session = get_session(_get_api_url(ctx))
-    token = session.get("access_token") if session else None
+    token = (session.get("access_token") or session.get("api_key")) if session else None
     return token if isinstance(token, str) else None
 
 
@@ -123,6 +129,7 @@ def _make_client(ctx: typer.Context) -> ApiClient:
 
 def _session_from_auth_response(data: dict[str, Any]) -> dict[str, Any]:
     return {
+        "credential_type": "jwt",
         "access_token": data["access_token"],
         "expires_at": data["expires_at"],
         "refresh_token": data["refresh_token"],
@@ -195,17 +202,52 @@ app.add_typer(auth_app, name="auth")
 @auth_app.command("login")
 def auth_login(
     ctx: typer.Context,
-    username: str = typer.Option(..., "--username", "-u", prompt="用户名"),
-    password: str = typer.Option(
-        ...,
+    username: str | None = typer.Option(None, "--username", "-u", help="登录用户名"),
+    password: str | None = typer.Option(
+        None,
         "--password",
-        prompt="密码",
-        hide_input=True,
         help="登录密码（省略选项时将隐藏提示输入）",
     ),
 ) -> None:
-    """登录并保存当前 API 地址的访问令牌"""
+    """使用用户名密码或 --api-key 登录并保存当前 API 地址的凭据"""
     api_url = _get_api_url(ctx)
+    api_key = _get_explicit_api_key(ctx)
+    if api_key:
+        if username is not None or password is not None:
+            cli_exit_error(
+                "CLI_USAGE_ERROR",
+                "--api-key 不能与 --username 或 --password 同时使用",
+            )
+        with ApiClient(
+            api_url,
+            _get_timeout(ctx),
+            api_key,
+            auth_hint=False,
+        ) as client:
+            user = client.get("/api/v1/auth/me")
+        save_session(
+            api_url,
+            {
+                "credential_type": "api_key",
+                "api_key": api_key,
+                "user": user,
+                "expires_at": None,
+            },
+        )
+        _success(
+            ctx,
+            {
+                "api_url": api_url,
+                "credential_type": "api_key",
+                "user": user,
+                "expires_at": None,
+            },
+        )
+
+    if username is None:
+        username = typer.prompt("用户名")
+    if password is None:
+        password = typer.prompt("密码", hide_input=True)
     with ApiClient(api_url, _get_timeout(ctx), auth_hint=False) as client:
         data: dict[str, Any] = client.post(
             "/api/v1/auth/login",
@@ -216,6 +258,7 @@ def auth_login(
         ctx,
         {
             "api_url": api_url,
+            "credential_type": "jwt",
             "user": data["user"],
             "expires_at": data["expires_at"],
         },
@@ -236,12 +279,26 @@ def auth_status(ctx: typer.Context) -> None:
     with ApiClient(_get_api_url(ctx), _get_timeout(ctx), token) as client:
         user = client.get("/api/v1/auth/me")
     session = get_session(_get_api_url(ctx))
+    obj = ctx.obj or {}
+    if obj.get("token") or os.environ.get("TODOLIST_TOKEN"):
+        credential_type = "token"
+    elif _get_explicit_api_key(ctx):
+        credential_type = "api_key"
+    elif session:
+        credential_type = session.get("credential_type") or (
+            "api_key" if session.get("api_key") else "jwt"
+        )
+    else:
+        credential_type = "token"
     _success(
         ctx,
         {
             "api_url": _get_api_url(ctx),
+            "credential_type": credential_type,
             "user": user,
-            "expires_at": session.get("expires_at") if session else None,
+            "expires_at": (
+                session.get("expires_at") if session and credential_type == "jwt" else None
+            ),
         },
     )
 
