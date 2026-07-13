@@ -1,7 +1,7 @@
 # AI 清单 CLI 设计方案
 
 **日期:** 2026-06-11  
-**状态:** 待实施
+**状态:** 已实施（2026-07-13 与当前产品能力重新对齐）
 
 ## 1. 目标
 
@@ -42,8 +42,11 @@ CLI 是薄客户端。服务端继续负责日期约束、系统清单保护、�
 ## 3. 全局接口
 
 ```text
-todo [GLOBAL_OPTIONS] <resource> <command> [COMMAND_OPTIONS]
+todo [GLOBAL_OPTIONS] RESOURCE COMMAND [ARGS]...
 ```
+
+全局参数既可放在资源命令前，也可放在最终子命令后。例如
+`todo --output table task ls` 与 `todo task ls --output table` 等价。
 
 全局参数：
 
@@ -51,11 +54,13 @@ todo [GLOBAL_OPTIONS] <resource> <command> [COMMAND_OPTIONS]
 |---|---|---|---|
 | `--api-url` | `TODOLIST_API_URL` | `http://127.0.0.1:8000` | API 根地址 |
 | `--timeout` | `TODOLIST_TIMEOUT` | `8` | 请求超时秒数 |
+| `--token` | `TODOLIST_TOKEN` | 已保存令牌 | 临时 Bearer JWT |
+| `--api-key` | `TODOLIST_API_KEY` | - | 长期 Bearer 凭据 |
 | `--output` | `TODOLIST_OUTPUT` | `json` | `json`、`jsonl` 或 `table` |
 | `--pretty` | - | 关闭 | 缩进 JSON，仅影响 `json` |
 | `--version` | - | - | 输出 CLI 版本 |
 
-配置优先级为：命令参数 > 环境变量 > 默认值。第一版不增加用户配置文件和鉴权；API 继续只监听回环地址。
+配置优先级为：命令参数 > 环境变量 > 已保存登录会话 > 默认值。
 
 ### 3.1 标准输出
 
@@ -209,7 +214,8 @@ todo group delete GROUP --yes
 
 ```text
 todo task ls [--view VIEW | --list LIST] [--query TEXT]
-             [--sort SORT] [--limit N] [--cursor CURSOR] [--all]
+             [--status open|completed] [--sort SORT]
+             [--limit N] [--cursor CURSOR] [--all]
 todo task get TASK_ID
 todo task create --title TITLE [OPTIONS]
 todo task update TASK_ID [OPTIONS]
@@ -226,6 +232,7 @@ todo task purge TASK_ID --yes
 - `--view` 可选 `inbox`、`today`、`all`、`completed`、`trash`。
 - `--sort` 可选 `manual`、`created-asc`、`created-desc`、`due-asc`、`priority-desc`。
 - `--view` 和 `--list` 互斥。
+- `--status` 仅和 `--list` 使用，可选 `open`、`completed`，默认 `open`。
 - 默认 `--limit 100`，范围 `1..200`。
 - `--all` 自动跟随游标拉取全部页面，不能和 `--cursor` 同时使用。
 
@@ -241,6 +248,12 @@ todo task purge TASK_ID --yes
 --priority none|low|medium|high|0|1|3|5
 --tag TAG                  可重复
 --item TEXT                可重复，创建初始检查项
+--recurrence daily|weekdays|weekly|monthly
+--recurrence-start YYYY-MM-DD
+--recurrence-end YYYY-MM-DD
+--recurrence-weekday mon|tue|wed|thu|fri|sat|sun
+--recurrence-monthday 1..31
+--reminder-offset-minutes INTEGER
 ```
 
 未提供 `--list` 时由服务端放入系统收集箱。
@@ -258,6 +271,9 @@ todo task purge TASK_ID --yes
 --tag TAG                  可重复，替换完整标签集合
 --clear-tags
 --sort-order INTEGER
+--clear-recurrence
+--clear-recurrence-end
+--clear-reminder-offset
 ```
 
 约束：
@@ -267,6 +283,8 @@ todo task purge TASK_ID --yes
 - `--tag` 表示完整替换，而不是追加，避免隐式读改写。
 - `--clear-due` 同时清除提醒时间，与现有 API 行为一致。
 - 时间必须是带时区偏移的 RFC 3339，例如 `2026-06-12T18:00:00+08:00`；拒绝无时区时间。
+- 周期任务必须设置开始日期；weekly 必须指定星期，monthly 必须指定日期。星期名称由
+  CLI 转换为 API 使用的周一 `0` 至周日 `6`。
 
 ### 5.4 标签
 

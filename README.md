@@ -75,15 +75,24 @@ npm --prefix desktop run build
 cargo check --manifest-path desktop/src-tauri/Cargo.toml
 ```
 
-CLI 首次使用前登录：
+## 命令行客户端
+
+安装并查看完整命令树：
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/lockdown56/ai-todo/master/scripts/install.sh | bash
+todo --help
 todo auth login
 todo auth status
 ```
 
 CLI 自动化或长期运行场景建议使用桌面端个人中心创建的 API Key，并通过
-`TODOLIST_API_KEY` 或 `--api-key` 传入。
+`TODOLIST_API_KEY` 或 `--api-key` 传入。全局参数可放在资源命令前或最终子命令后，例如
+`todo --output table task ls` 与 `todo task ls --output table` 等价。
+交互登录保存的会话会使用 refresh token 自动续期，`todo auth logout` 会撤销该会话。
+
+CLI 覆盖清单分组与归档、清单内已完成任务、周期任务、标签和检查项。完整参数、周期规则、
+JSON 输入及输出契约见 [`docs/cli-usage.md`](docs/cli-usage.md)。
 
 Windows 打包：
 

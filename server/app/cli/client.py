@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
@@ -44,11 +45,15 @@ class ApiClient:
         token: str | None = None,
         *,
         auth_hint: bool = True,
+        refresh_token: str | None = None,
+        on_refresh: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self._base = base_url.rstrip("/")
         headers = {"Authorization": f"Bearer {token}"} if token else None
         self._client = httpx.Client(base_url=self._base, timeout=timeout, headers=headers)
         self._auth_hint = auth_hint
+        self._refresh_token = refresh_token
+        self._on_refresh = on_refresh
 
     def close(self) -> None:
         self._client.close()
@@ -74,6 +79,8 @@ class ApiClient:
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
             resp = self._client.request(method, path, **kwargs)
+            if resp.status_code == 401 and self._refresh_token and path != "/api/v1/auth/refresh":
+                resp = self._refresh_and_retry(method, path, kwargs)
         except httpx.TimeoutException:
             cli_exit_error("REQUEST_TIMEOUT", "请求超时", http_status=0)
         except httpx.HTTPError:
@@ -108,6 +115,28 @@ class ApiClient:
             )
 
         return body
+
+    def _refresh_and_retry(self, method: str, path: str, kwargs: dict[str, Any]) -> httpx.Response:
+        refresh_resp = self._client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": self._refresh_token},
+        )
+        if refresh_resp.status_code >= 400:
+            return refresh_resp
+        try:
+            refreshed: dict[str, Any] = refresh_resp.json()
+            access_token = refreshed["access_token"]
+            self._refresh_token = refreshed["refresh_token"]
+        except (ValueError, KeyError, TypeError):
+            cli_exit_error(
+                "INVALID_RESPONSE",
+                "刷新登录会话时服务端响应不符合协议",
+                http_status=refresh_resp.status_code,
+            )
+        self._client.headers["Authorization"] = f"Bearer {access_token}"
+        if self._on_refresh is not None:
+            self._on_refresh(refreshed)
+        return self._client.request(method, path, **kwargs)
 
 
 def cli_exit_ok(data: Any, meta: dict[str, Any] | None = None) -> None:

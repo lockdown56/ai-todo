@@ -31,23 +31,38 @@ bash scripts/install.sh
 todo [全局选项] <资源> <命令> [参数]
 ```
 
-全局选项：`--api-url`、`--timeout`、`--output json|jsonl|table`、`--pretty`
+全局选项：`--api-url`、`--timeout`、`--token`、`--api-key`、
+`--output json|jsonl|table`、`--pretty`。全局选项可放在资源命令前或最终子命令后。
 
 ## 核心命令速查
+
+登录会话会自动使用 refresh token 续期；`todo auth logout` 会撤销服务端会话。
 
 ### 任务 (task)
 
 ```bash
-todo task ls [--view inbox|today|all|completed|trash] [--list LIST] [-q 搜索] [--sort manual|created-asc|created-desc|due-asc|priority-desc] [--all]
+todo task ls [--view inbox|today|all|completed|trash | --list LIST [--status open|completed]] [-q 搜索] [--sort manual|created-asc|created-desc|due-asc|priority-desc] [--all]
 todo task get TASK_ID
-todo task create --title TITLE [--list LIST] [-d 描述] [--due-at RFC3339] [--all-day] [-p none|low|medium|high] [-t 标签...] [-i 检查项...]
-todo task update TASK_ID [--title ...] [--list ...] [-d ... | --clear-description] [--due-at ... | --clear-due] [-p ...] [-t 标签... | --clear-tags]
+todo task create --title TITLE [--list LIST] [-d 描述] [--due-at RFC3339] [--all-day] [-p none|low|medium|high] [-t 标签...] [-i 检查项...] [周期参数]
+todo task update TASK_ID [--title ...] [--list ...] [-d ... | --clear-description] [--due-at ... | --clear-due] [-p ...] [-t 标签... | --clear-tags] [周期参数或 --clear-recurrence]
 todo task complete TASK_ID
 todo task reopen TASK_ID
 todo task delete TASK_ID
 todo task restore TASK_ID
 todo task purge TASK_ID --yes
 ```
+
+周期参数：
+
+```bash
+--recurrence daily|weekdays|weekly|monthly --recurrence-start YYYY-MM-DD
+[--recurrence-end YYYY-MM-DD]
+[--recurrence-weekday mon|tue|wed|thu|fri|sat|sun]
+[--recurrence-monthday 1..31] [--reminder-offset-minutes N]
+```
+
+weekly 必须指定 weekday，monthly 必须指定 monthday。更新还支持
+`--clear-recurrence-end`、`--clear-reminder-offset` 和 `--clear-recurrence`。
 
 ### 清单 (list)
 
@@ -99,7 +114,7 @@ todo item reorder TASK_ID ITEM_ID1 ITEM_ID2 ...
 ## 选择器规则
 
 - **任务/检查项**：仅 UUID
-- **清单/标签**：UUID 或名称（大小写不敏感精确匹配）
+- **清单/分组/标签**：UUID 或名称（大小写不敏感精确匹配）
 - 输出始终包含 UUID，后续操作优先使用 UUID
 
 ## JSON 输入
@@ -128,7 +143,7 @@ JSON 使用 API snake_case 字段名。`list_id`/`tag_ids` 必须是 UUID。
 {"ok":false,"error":{"code":"TASK_NOT_FOUND","message":"...","fields":null,"http_status":404}}
 ```
 
-退出码：0=成功，2=参数错误，3=404，4=409，5=422，7=网络错误
+退出码：0=成功，2=参数错误，3=404，4=409，5=422，6=鉴权错误，7=网络错误，8=其他 API 错误
 
 ## 时间格式
 

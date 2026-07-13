@@ -14,9 +14,12 @@ CLI 命令与 FastAPI 端点的对应关系。
 |---|---|---|
 | `todo list ls` | `GET /api/v1/lists` | 活动清单 |
 | `todo list ls --trash` | `GET /api/v1/lists/trash` | 回收站 |
-| `todo list get SELECTOR` | 组合 `GET /lists` + `GET /lists/trash` | 按 ID 或名称匹配 |
+| `todo list ls --archived` | `GET /api/v1/lists/archived` | 已归档 |
+| `todo list get SELECTOR` | 组合活动、归档和回收站查询 | 按 ID 或名称匹配 |
 | `todo list create` | `POST /api/v1/lists` | |
 | `todo list update` | `PATCH /api/v1/lists/{id}` | 先通过选择器解析 ID |
+| `todo list archive` | `POST /api/v1/lists/{id}/archive` | |
+| `todo list unarchive` | `POST /api/v1/lists/{id}/unarchive` | |
 | `todo list delete` | `DELETE /api/v1/lists/{id}` | 软删除 |
 | `todo list restore` | `POST /api/v1/lists/{id}/restore` | |
 | `todo list purge` | `DELETE /api/v1/lists/{id}/permanent` | 永久删除 |
@@ -45,6 +48,7 @@ CLI 命令与 FastAPI 端点的对应关系。
 | `--view completed` | `view=completed` | |
 | `--view trash` | `view=trash` | |
 | `--list SELECTOR` | `list_id=UUID` | 先解析选择器 |
+| `--status open|completed` | `status=0|2` | 仅用于 `--list` |
 | `--query TEXT` | `query=TEXT` | |
 | `--sort manual` | `sort=manual` | 默认 |
 | `--sort created-asc` | `sort=created_asc` | |
@@ -61,6 +65,40 @@ CLI 命令与 FastAPI 端点的对应关系。
 | `low` / `1` | `1` |
 | `medium` / `3` | `3` |
 | `high` / `5` | `5` |
+
+### 周期任务字段
+
+| CLI 参数 | API 字段 |
+|---|---|
+| `--recurrence` | `recurrence_type` |
+| `--recurrence-start` | `recurrence_start_date` |
+| `--recurrence-end` | `recurrence_end_date` |
+| `--recurrence-weekday mon..sun` | `recurrence_weekday=0..6` |
+| `--recurrence-monthday` | `recurrence_monthday` |
+| `--reminder-offset-minutes` | `reminder_offset_minutes` |
+
+## 认证与 API Key
+
+| CLI | HTTP |
+|---|---|
+| `todo auth login` | `POST /api/v1/auth/login` |
+| `todo auth status` | `GET /api/v1/auth/me` |
+| 登录会话自动续期 | `POST /api/v1/auth/refresh` |
+| `todo auth logout` | `POST /api/v1/auth/logout` 后删除本地会话 |
+| `todo api-key create` | `POST /api/v1/api-keys` |
+| `todo api-key ls` | `GET /api/v1/api-keys` |
+| `todo api-key delete` | `DELETE /api/v1/api-keys/{id}` |
+
+刷新成功后 CLI 保存轮换后的 access token 和 refresh token。
+
+## 清单分组
+
+| CLI | HTTP |
+|---|---|
+| `todo group ls/get` | `GET /api/v1/list-groups` |
+| `todo group create` | `POST /api/v1/list-groups` |
+| `todo group update` | `PATCH /api/v1/list-groups/{id}` |
+| `todo group delete` | `DELETE /api/v1/list-groups/{id}` |
 
 ## 标签
 

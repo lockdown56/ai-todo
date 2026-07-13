@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from app.cli.client import cli_exit_error
@@ -42,6 +42,14 @@ def parse_rfc3339(value: str, field_name: str = "时间") -> datetime:
             f"{field_name} 必须带时区偏移，例如 2026-06-12T18:00:00+08:00",
         )
     return dt
+
+
+def parse_iso_date(value: str, field_name: str = "日期") -> date:
+    try:
+        return date.fromisoformat(value)
+    except (ValueError, TypeError):
+        cli_exit_error("CLI_USAGE_ERROR", f"{field_name} 不是有效的 YYYY-MM-DD 日期: {value}")
+        raise  # unreachable
 
 
 def load_json_input(source: str | None) -> dict[str, Any] | None:
