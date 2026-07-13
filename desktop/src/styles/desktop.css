@@ -52,16 +52,10 @@
 }
 
 .logo {
-  display: grid;
+  display: block;
   width: 30px;
   height: 30px;
   flex: 0 0 auto;
-  place-items: center;
-  border-radius: 9px;
-  background: var(--primary);
-  color: white;
-  font-size: 14px;
-  font-weight: 700;
 }
 
 .sidebar-header strong {
@@ -597,13 +591,10 @@ body.is-list-sorting .sortable-list-item {
 }
 
 .auth-logo {
-  display: grid;
+  display: block;
   width: 46px;
   height: 46px;
-  place-items: center;
-  border-radius: 13px;
-  background: var(--primary);
-  color: white;
+  flex: 0 0 auto;
 }
 
 .auth-brand h1 {

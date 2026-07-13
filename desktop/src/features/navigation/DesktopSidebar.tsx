@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { LogoMark } from "@/components/LogoMark";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -356,7 +357,7 @@ export function DesktopSidebar({
         <div className="sidebar-header">
         {!collapsed && (
           <>
-            <div className="logo">AI</div>
+            <LogoMark className="logo" />
             <strong>AI 清单</strong>
           </>
         )}

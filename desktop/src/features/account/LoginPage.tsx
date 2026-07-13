@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { KeyRound, LoaderCircle } from "lucide-react";
+import { LogoMark } from "@/components/LogoMark";
+import { LoaderCircle } from "lucide-react";
 import { api } from "@/api";
 import { setAuthSession } from "@/auth";
 import { errorMessage } from "@/lib/error-utils";
@@ -40,9 +41,7 @@ export function LoginPage() {
     <main className="auth-page">
       <section className="auth-card">
         <div className="auth-brand">
-          <div className="auth-logo">
-            <KeyRound />
-          </div>
+          <LogoMark className="auth-logo" />
           <div>
             <h1>登录 AI 清单</h1>
             <p>使用服务端配置的账号继续。</p>
