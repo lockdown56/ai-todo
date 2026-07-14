@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "test": "vitest --config vitest.config.ts",
     "tauri": "tauri",
+    "icons:generate": "tauri icon src-tauri/app-icon-manifest.json",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
     "android:apk": "tauri android build --apk",
