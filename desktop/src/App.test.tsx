@@ -3,12 +3,21 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { makeTask, server } from "./test/server";
 
-function renderApp(path = "/view/inbox") {
+function HistoryProbe() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return <div hidden>
+    <span data-testid="history-location">{location.pathname}{location.search}</span>
+    <button data-testid="history-back" type="button" onClick={() => navigate(-1)}>测试返回</button>
+  </div>;
+}
+
+function renderApp(path = "/view/inbox", historyEntries?: string[]) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: 0 },
@@ -17,8 +26,12 @@ function renderApp(path = "/view/inbox") {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter
+        initialEntries={historyEntries || [path]}
+        initialIndex={historyEntries ? historyEntries.length - 1 : undefined}
+      >
         <App />
+        {historyEntries && <HistoryProbe />}
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -39,6 +52,30 @@ async function openDetailTitleEditor(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("AI 清单 app", () => {
+  it("does not add task details to the return history", async () => {
+    const user = userEvent.setup();
+    renderApp("/view/inbox", ["/view/all", "/view/inbox"]);
+
+    await user.click(await screen.findByText("编写测试"));
+    expect(screen.getByTestId("history-location")).toHaveTextContent("/view/inbox?task=");
+    await user.click(screen.getByTestId("history-back"));
+
+    expect(await screen.findByRole("heading", { name: "全部" })).toBeInTheDocument();
+    expect(screen.getByTestId("history-location")).toHaveTextContent("/view/all");
+  });
+
+  it("does not add closing task details to the return history", async () => {
+    const user = userEvent.setup();
+    renderApp("/view/inbox", ["/view/all", "/view/inbox"]);
+
+    await user.click(await screen.findByText("编写测试"));
+    await user.click(await screen.findByRole("button", { name: "关闭任务详情" }));
+    expect(screen.getByTestId("history-location")).toHaveTextContent("/view/inbox");
+    await user.click(screen.getByTestId("history-back"));
+
+    expect(await screen.findByRole("heading", { name: "全部" })).toBeInTheDocument();
+  });
+
   it("requires login and authenticates with the configured account", async () => {
     localStorage.clear();
     const user = userEvent.setup();

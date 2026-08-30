@@ -285,22 +285,31 @@ export function useTaskWorkspace() {
     [navigate],
   );
 
+  const replaceTaskSelection = useCallback(
+    (taskId: string | null) => {
+      const searchParams = new URLSearchParams(location.search);
+      if (taskId) searchParams.set("task", taskId);
+      else searchParams.delete("task");
+      const query = searchParams.toString();
+      navigate(`${location.pathname}${query ? `?${query}` : ""}`, { replace: true });
+    },
+    [location.pathname, location.search, navigate],
+  );
+
   const openTask = useCallback(
     async (taskId: string) => {
       if (selectedTaskId === taskId) return;
       if (editorRef.current && !(await editorRef.current.flush())) return;
-      const searchParams = new URLSearchParams(location.search);
-      searchParams.set("task", taskId);
-      navigate(`${location.pathname}?${searchParams}`);
+      replaceTaskSelection(taskId);
     },
-    [location.pathname, location.search, navigate, selectedTaskId],
+    [replaceTaskSelection, selectedTaskId],
   );
 
   const closeDetail = useCallback(async () => {
     if (editorRef.current && !(await editorRef.current.flush())) return;
     setSelectedTaskId(scopeKey, null);
-    navigate(location.pathname);
-  }, [location.pathname, navigate, scopeKey]);
+    replaceTaskSelection(null);
+  }, [replaceTaskSelection, scopeKey]);
 
   const createdTaskMatchesCurrentView = useCallback(
     (task: Task) => {
@@ -444,7 +453,7 @@ export function useTaskWorkspace() {
     mutationFn: api.deleteTask,
     onSuccess: (_, id) => {
       setSelectedTaskId(scopeKey, null);
-      navigate(location.pathname);
+      replaceTaskSelection(null);
       invalidateTaskData(queryClient, id);
     },
   });
@@ -452,7 +461,7 @@ export function useTaskWorkspace() {
     mutationFn: api.restoreTask,
     onSuccess: (task) => {
       setSelectedTaskId(scopeKey, null);
-      navigate(location.pathname);
+      replaceTaskSelection(null);
       invalidateTaskData(queryClient, task.id);
     },
   });
@@ -460,7 +469,7 @@ export function useTaskWorkspace() {
     mutationFn: api.permanentDeleteTask,
     onSuccess: (_, id) => {
       setSelectedTaskId(scopeKey, null);
-      navigate(location.pathname);
+      replaceTaskSelection(null);
       invalidateTaskData(queryClient, id);
     },
   });
