@@ -1,9 +1,12 @@
 FROM python:3.12-slim
 
+ARG PYPI_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ENV UV_DEFAULT_INDEX=${PYPI_INDEX_URL}
+
 WORKDIR /app
-RUN pip install --no-cache-dir uv
+RUN pip install --no-cache-dir --index-url "${PYPI_INDEX_URL}" uv
 COPY pyproject.toml uv.lock* ./
-RUN uv sync --no-dev --frozen || uv sync --no-dev
+RUN uv sync --no-dev
 COPY app app
 COPY migrations migrations
 COPY alembic.ini .
