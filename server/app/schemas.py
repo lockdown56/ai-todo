@@ -387,4 +387,5 @@ class TaskPage(BaseModel):
 
 
 TaskView = Literal["inbox", "today", "all", "completed", "trash"]
+TaskDateSection = Literal["today", "overdue"]
 TaskSort = Literal["manual", "created_asc", "created_desc", "due_asc", "priority_desc"]

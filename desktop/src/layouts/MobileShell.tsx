@@ -78,6 +78,8 @@ export function MobileShell() {
     tags,
     tasks,
     taskItems,
+    overdueTasksQuery,
+    overdueTaskItems,
     completedTasksQuery,
     completedTaskItems,
     listScopeId,
@@ -252,7 +254,7 @@ export function MobileShell() {
         <>
           <TaskHeader
             title={currentTitle}
-            count={taskItems.length}
+            count={taskItems.length + overdueTaskItems.length}
             search={search}
             sort={sort}
             quickAddRef={quickAddRef}
@@ -295,21 +297,27 @@ export function MobileShell() {
             </div>
             <TaskListPanel
               tasks={taskItems}
+              overdueTasks={scope.view === "today" ? overdueTaskItems : undefined}
               completedTasks={listScopeId ? completedTaskItems : undefined}
               activeTaskId={selectedTaskId}
               view={scope.view}
               lists={lists.data || []}
               showSourceLists={Boolean(scope.smartListId)}
               loading={tasks.isPending}
+              overdueLoading={scope.view === "today" ? overdueTasksQuery.isPending : undefined}
               completedLoading={listScopeId ? completedTasksQuery.isPending : undefined}
               error={tasks.error}
               hasNext={tasks.hasNextPage}
+              overdueHasNext={scope.view === "today" ? overdueTasksQuery.hasNextPage : undefined}
               completedHasNext={listScopeId ? completedTasksQuery.hasNextPage : undefined}
               fetchingNext={tasks.isFetchingNextPage}
+              overdueFetchingNext={scope.view === "today" ? overdueTasksQuery.isFetchingNextPage : undefined}
               completedFetchingNext={
                 listScopeId ? completedTasksQuery.isFetchingNextPage : undefined
               }
               onLoadMore={() => void tasks.fetchNextPage()}
+              onLoadMoreOverdue={scope.view === "today"
+                ? () => void overdueTasksQuery.fetchNextPage() : undefined}
               onLoadMoreCompleted={
                 listScopeId ? () => void completedTasksQuery.fetchNextPage() : undefined
               }

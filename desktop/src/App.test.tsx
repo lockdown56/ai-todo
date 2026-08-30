@@ -252,6 +252,32 @@ describe("AI 清单 app", () => {
     expect(screen.getByRole("navigation", { name: "任务导航" })).toBeInTheDocument();
   });
 
+  it("shows overdue tasks below today's tasks in the today view", async () => {
+    const today = new Date();
+    today.setHours(10, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    server.use(
+      http.get("http://127.0.0.1:8000/api/v1/tasks", ({ request }) => {
+        const section = new URL(request.url).searchParams.get("date_section");
+        const task = section === "overdue"
+          ? makeTask({ id: "00000000-0000-4000-8000-000000000302", title: "昨天截止", due_at: yesterday.toISOString() })
+          : makeTask({ id: "00000000-0000-4000-8000-000000000301", title: "今天截止", due_at: today.toISOString() });
+        return HttpResponse.json({ items: [task], next_cursor: null });
+      }),
+    );
+    const { container } = renderApp("/view/today");
+
+    const todayTitle = await screen.findByText("今天截止");
+    const overdueTitle = await screen.findByText("昨天截止");
+    expect(screen.getByText("已过期")).toBeInTheDocument();
+    expect(screen.getByText("2 个任务")).toBeInTheDocument();
+    expect(
+      todayTitle.compareDocumentPosition(overdueTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(container.querySelector(".task-section")?.textContent).toContain("昨天截止");
+  });
+
   it("renders list actions outside the scrollable list container", async () => {
     const user = userEvent.setup();
     const { container } = renderApp();

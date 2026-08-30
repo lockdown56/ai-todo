@@ -167,6 +167,7 @@ export function useTaskWorkspace() {
     queryFn: ({ pageParam }) =>
       api.tasks({
         view: scope.view,
+        dateSection: scope.view === "today" ? "today" : undefined,
         listId: scope.listId,
         smartListId: scope.smartListId,
         query: debouncedSearch,
@@ -176,6 +177,19 @@ export function useTaskWorkspace() {
     initialPageParam: "",
     getNextPageParam: (page) => page.next_cursor || undefined,
     enabled: health.isSuccess,
+  });
+  const overdueTasksQuery = useInfiniteQuery({
+    queryKey: queryKeys.tasks(`${scopeKey}:overdue`, debouncedSearch, sort),
+    queryFn: ({ pageParam }) => api.tasks({
+      view: "today",
+      dateSection: "overdue",
+      query: debouncedSearch,
+      sort,
+      cursor: pageParam || undefined,
+    }),
+    initialPageParam: "",
+    getNextPageParam: (page) => page.next_cursor || undefined,
+    enabled: health.isSuccess && scope.view === "today",
   });
   const completedTasksQuery = useInfiniteQuery({
     queryKey: queryKeys.tasks(scopeKey, debouncedSearch, "created_desc", 2),
@@ -200,6 +214,10 @@ export function useTaskWorkspace() {
     () => completedTasksQuery.data?.pages.flatMap((page) => page.items) || [],
     [completedTasksQuery.data],
   );
+  const overdueTaskItems = useMemo(
+    () => overdueTasksQuery.data?.pages.flatMap((page) => page.items) || [],
+    [overdueTasksQuery.data],
+  );
   const currentList = lists.data?.find((item) => item.id === scope.listId);
   const currentSmartList = smartLists.data?.find((item) => item.id === scope.smartListId);
 
@@ -215,6 +233,7 @@ export function useTaskWorkspace() {
         tags.refetch(),
         tasks.refetch(),
       ];
+      if (scope.view === "today") refreshes.push(overdueTasksQuery.refetch());
       if (listScopeId) refreshes.push(completedTasksQuery.refetch());
       if (scope.view === "trash") refreshes.push(trashLists.refetch());
       if (showArchived) refreshes.push(archivedLists.refetch());
@@ -235,6 +254,7 @@ export function useTaskWorkspace() {
     smartLists,
     listScopeId,
     lists,
+    overdueTasksQuery,
     queryClient,
     scope.view,
     selectedTaskId,
@@ -481,6 +501,8 @@ export function useTaskWorkspace() {
     tags,
     tasks,
     taskItems,
+    overdueTasksQuery,
+    overdueTaskItems,
     completedTasksQuery,
     completedTaskItems,
     listScopeId,

@@ -13,7 +13,15 @@ from app.database import get_session
 from app.errors import ApiError
 from app.models import ChecklistItem, Tag, Task, TaskList, TaskOccurrence
 from app.repositories import next_sort_order
-from app.schemas import TaskCreate, TaskPage, TaskResponse, TaskSort, TaskUpdate, TaskView
+from app.schemas import (
+    TaskCreate,
+    TaskDateSection,
+    TaskPage,
+    TaskResponse,
+    TaskSort,
+    TaskUpdate,
+    TaskView,
+)
 from app.services import (
     delete_task,
     get_inbox,
@@ -35,6 +43,7 @@ async def get_tasks(
     view: TaskView | None = None,
     list_id: UUID | None = None,
     smart_list_id: UUID | None = None,
+    date_section: TaskDateSection | None = None,
     status: int = Query(default=0, ge=0, le=2),
     query: str | None = None,
     sort: TaskSort = "manual",
@@ -52,11 +61,14 @@ async def get_tasks(
         raise ApiError(422, "INVALID_TASK_STATUS", "status 仅在使用 list_id 时有效")
     if list_id is not None and status not in (0, 2):
         raise ApiError(422, "INVALID_TASK_STATUS", "status 仅允许 0 或 2")
+    if date_section is not None and view != "today":
+        raise ApiError(422, "INVALID_DATE_SECTION", "date_section 仅适用于今天视图")
     tasks, next_cursor = await list_tasks(
         session,
         view=view,
         list_id=list_id,
         smart_list_id=smart_list_id,
+        date_section=date_section,
         status=status,
         query_text=query,
         sort=sort,

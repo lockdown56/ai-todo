@@ -26,19 +26,24 @@ function PanelState({ icon, title, description }: { icon: React.ReactNode; title
 export function TaskListPanel({
   tasks,
   completedTasks,
+  overdueTasks,
   activeTaskId,
   view,
   lists,
   showSourceLists = false,
   loading,
   completedLoading,
+  overdueLoading,
   error,
   hasNext,
   completedHasNext,
+  overdueHasNext,
   fetchingNext,
   completedFetchingNext,
+  overdueFetchingNext,
   onLoadMore,
   onLoadMoreCompleted,
+  onLoadMoreOverdue,
   onSelect,
   onRename,
   onCreateNext,
@@ -51,19 +56,24 @@ export function TaskListPanel({
 }: {
   tasks: Task[];
   completedTasks?: Task[];
+  overdueTasks?: Task[];
   activeTaskId?: string;
   view?: TaskView;
   lists?: TaskList[];
   showSourceLists?: boolean;
   loading: boolean;
   completedLoading?: boolean;
+  overdueLoading?: boolean;
   error: unknown;
   hasNext: boolean;
   completedHasNext?: boolean;
+  overdueHasNext?: boolean;
   fetchingNext: boolean;
   completedFetchingNext?: boolean;
+  overdueFetchingNext?: boolean;
   onLoadMore: () => void;
   onLoadMoreCompleted?: () => void;
+  onLoadMoreOverdue?: () => void;
   onSelect: (id: string) => Promise<void>;
   onRename: (task: Task, title: string) => Promise<Task>;
   onCreateNext: (afterTask: Task, sortOrder: number) => Promise<Task>;
@@ -164,9 +174,10 @@ export function TaskListPanel({
   const showCompletedSection = completedTasks !== undefined;
   const hasActiveTasks = tasks.length > 0;
   const hasCompletedTasks = (completedTasks?.length || 0) > 0;
+  const hasOverdueTasks = (overdueTasks?.length || 0) > 0;
 
-  if (!hasActiveTasks && !hasCompletedTasks) {
-    if (showCompletedSection && completedLoading) {
+  if (!hasActiveTasks && !hasCompletedTasks && !hasOverdueTasks) {
+    if ((showCompletedSection && completedLoading) || overdueLoading) {
       return <PanelState icon={<LoaderCircle className="spin" />} title="正在加载任务" />;
     }
     const messages: Record<TaskView | "list", [string, string]> = {
@@ -360,10 +371,23 @@ export function TaskListPanel({
           onLoadMore();
           return;
         }
+        if (overdueHasNext && onLoadMoreOverdue) {
+          onLoadMoreOverdue();
+          return;
+        }
         if (completedHasNext && onLoadMoreCompleted) onLoadMoreCompleted();
       }}
     >
       {tasks.map(renderTaskRow)}
+      {(hasOverdueTasks || overdueLoading) && (
+        <div className="task-section">
+          <div className="task-section-label">已过期</div>
+          {overdueTasks?.map(renderTaskRow)}
+          {overdueLoading && !hasOverdueTasks && (
+            <div className="next-page"><LoaderCircle className="spin" /> 加载已过期任务</div>
+          )}
+        </div>
+      )}
       {showCompletedSection && (hasCompletedTasks || completedLoading) && (
         <div className="task-section">
           <div className="task-section-label">已完成</div>
@@ -375,6 +399,9 @@ export function TaskListPanel({
       )}
       {inlineError && <div className="inline-error task-list-error">{inlineError}</div>}
       {fetchingNext && <div className="next-page"><LoaderCircle className="spin" /> 加载更多</div>}
+      {overdueFetchingNext && (
+        <div className="next-page"><LoaderCircle className="spin" /> 加载更多已过期任务</div>
+      )}
       {completedFetchingNext && (
         <div className="next-page"><LoaderCircle className="spin" /> 加载更多已完成</div>
       )}

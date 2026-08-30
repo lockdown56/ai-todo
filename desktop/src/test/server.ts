@@ -199,6 +199,7 @@ export const handlers = [
     const listId = url.searchParams.get("list_id");
     const status = url.searchParams.get("status");
     const view = url.searchParams.get("view");
+    const dateSection = url.searchParams.get("date_section");
     let items = tasks;
 
     if (listId) {
@@ -216,6 +217,15 @@ export const handlers = [
       items = items.filter((task) => task.deleted_at === null && task.status === 0);
       if (view === "inbox") {
         items = items.filter((task) => task.list_id === inbox.id);
+      } else if (view === "today") {
+        const current = new Date();
+        const start = new Date(current.getFullYear(), current.getMonth(), current.getDate());
+        const end = new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1);
+        items = items.filter((task) => {
+          if (!task.due_at) return false;
+          const due = new Date(task.due_at);
+          return dateSection === "overdue" ? due < start : due >= start && due < end;
+        });
       }
     }
 

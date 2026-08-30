@@ -31,7 +31,7 @@ from app.models import (
     User,
 )
 from app.repositories import get_group, get_list, get_smart_list, get_task, task_with_details
-from app.schemas import TaskSort, TaskView
+from app.schemas import TaskDateSection, TaskSort, TaskView
 
 API_KEY_PREFIX = "tdl_"
 API_KEY_PREFIX_DISPLAY_LEN = 12
@@ -358,6 +358,7 @@ async def list_tasks(
     view: TaskView | None,
     list_id: UUID | None,
     smart_list_id: UUID | None = None,
+    date_section: TaskDateSection | None = None,
     status: int = 0,
     query_text: str | None,
     sort: TaskSort,
@@ -403,11 +404,15 @@ async def list_tasks(
             local_now = datetime.now(timezone)
             start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
             end = start + timedelta(days=1)
-            query = query.where(
-                or_(
-                    and_(Task.due_at >= start, Task.due_at < end), Task.recurrence_type.is_not(None)
+            if date_section == "overdue":
+                query = query.where(Task.due_at < start, Task.recurrence_type.is_(None))
+            else:
+                query = query.where(
+                    or_(
+                        and_(Task.due_at >= start, Task.due_at < end),
+                        Task.recurrence_type.is_not(None),
+                    )
                 )
-            )
 
     if query_text and (cleaned := query_text.strip()):
         pattern = f"%{cleaned}%"
@@ -417,7 +422,7 @@ async def list_tasks(
     tasks = list((await session.scalars(query)).unique().all())
     timezone = ZoneInfo(get_settings().app_timezone)
     today = datetime.now(timezone).date()
-    if view == "today":
+    if view == "today" and date_section != "overdue":
         tasks = [
             task
             for task in tasks

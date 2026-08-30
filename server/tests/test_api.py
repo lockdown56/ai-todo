@@ -509,6 +509,41 @@ async def test_task_date_validation_and_today_view(client):
 
 
 @pytest.mark.asyncio
+async def test_today_date_sections_include_overdue_tasks(client):
+    now = datetime.now(UTC)
+    overdue = await client.post(
+        "/api/v1/tasks",
+        json={"title": "已过期任务", "due_at": (now - timedelta(days=2)).isoformat()},
+    )
+    today = await client.post(
+        "/api/v1/tasks",
+        json={"title": "今天任务", "due_at": (now + timedelta(minutes=5)).isoformat()},
+    )
+    completed = await client.post(
+        "/api/v1/tasks",
+        json={"title": "已完成逾期任务", "due_at": (now - timedelta(days=3)).isoformat()},
+    )
+    await client.post(f"/api/v1/tasks/{completed.json()['id']}/complete")
+
+    today_response = await client.get(
+        "/api/v1/tasks", params={"view": "today", "date_section": "today"}
+    )
+    overdue_response = await client.get(
+        "/api/v1/tasks", params={"view": "today", "date_section": "overdue"}
+    )
+    today_ids = {item["id"] for item in today_response.json()["items"]}
+    overdue_ids = {item["id"] for item in overdue_response.json()["items"]}
+    assert today.json()["id"] in today_ids
+    assert overdue.json()["id"] not in today_ids
+    assert overdue.json()["id"] in overdue_ids
+    assert completed.json()["id"] not in overdue_ids
+
+    invalid = await client.get("/api/v1/tasks", params={"view": "all", "date_section": "overdue"})
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "INVALID_DATE_SECTION"
+
+
+@pytest.mark.asyncio
 async def test_task_soft_delete_restore_and_permanent_delete(client):
     created = await client.post("/api/v1/tasks", json={"title": "待删除"})
     task_id = created.json()["id"]

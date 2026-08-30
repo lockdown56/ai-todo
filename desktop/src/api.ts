@@ -271,6 +271,7 @@ export const api = {
     view?: TaskView;
     listId?: string;
     smartListId?: string;
+    dateSection?: "today" | "overdue";
     status?: 0 | 2;
     query?: string;
     sort: TaskSort;
@@ -280,6 +281,7 @@ export const api = {
     if (params.view) search.set("view", params.view);
     if (params.listId) search.set("list_id", params.listId);
     if (params.smartListId) search.set("smart_list_id", params.smartListId);
+    if (params.dateSection) search.set("date_section", params.dateSection);
     if (params.status !== undefined) search.set("status", String(params.status));
     if (params.query) search.set("query", params.query);
     if (params.cursor) search.set("cursor", params.cursor);
