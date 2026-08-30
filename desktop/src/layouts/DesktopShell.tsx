@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ListChecks } from "lucide-react";
 import { useTaskWorkspace } from "@/features/tasks/useTaskWorkspace";
@@ -13,6 +13,7 @@ import { ConnectionError } from "@/components/ConnectionError";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ListDialog } from "@/components/ListDialog";
 import { GroupDialog } from "@/components/GroupDialog";
+import { SmartListDialog } from "@/components/SmartListDialog";
 import { DeletedLists } from "@/components/DeletedLists";
 import { viewNames, priorityShortcutValues } from "@/lib/constants";
 import { errorMessage } from "@/lib/error-utils";
@@ -21,10 +22,11 @@ import { dueAtForShortcut } from "@/lib/date-utils";
 import { useListReorder } from "@/lib/use-list-reorder";
 import { api } from "@/api";
 import { queryKeys } from "@/query";
-import type { ListGroup, Task, TaskList, TaskView } from "@/types";
+import type { ListGroup, SmartList, Task, TaskList, TaskView } from "@/types";
 
 export function DesktopShell() {
   const queryClient = useQueryClient();
+  const [smartListDialog, setSmartListDialog] = useState<SmartList | null | undefined>();
   const {
     scope,
     selectedTaskId,
@@ -50,6 +52,7 @@ export function DesktopShell() {
     health,
     lists,
     listGroups,
+    smartLists,
     trashLists,
     archivedLists,
     tags,
@@ -59,6 +62,7 @@ export function DesktopShell() {
     completedTaskItems,
     listScopeId,
     currentList,
+    currentSmartList,
     isSettingsRoute,
     isProfileRoute,
     isUtilityRoute,
@@ -91,6 +95,8 @@ export function DesktopShell() {
       ? "个人中心"
     : scope.listId
       ? currentList?.name || "清单"
+      : scope.smartListId
+        ? currentSmartList?.name || "智能清单"
       : viewNames[scope.view || "inbox"];
 
   const invalidateListData = () => {
@@ -223,6 +229,7 @@ export function DesktopShell() {
           collapsed={effectiveSidebarCollapsed}
           currentPath={location.pathname}
           lists={lists.data || []}
+          smartLists={smartLists.data || []}
           groups={listGroups.data || []}
           archivedLists={archivedLists.data || []}
           showArchived={showArchived}
@@ -230,6 +237,17 @@ export function DesktopShell() {
           onToggle={toggleSidebar}
           onNavigate={navigateAfterFlush}
           onAdd={() => setListDialog({ mode: "create" })}
+          onAddSmartList={() => setSmartListDialog(null)}
+          onEditSmartList={setSmartListDialog}
+          onDeleteSmartList={(smartList) => setConfirm({
+            title: "删除智能清单",
+            message: `“${smartList.name}”将被删除，实际清单和任务会保留。`,
+            action: () => { void api.deleteSmartList(smartList.id).then(() => {
+              setConfirm(null);
+              void queryClient.invalidateQueries({ queryKey: queryKeys.smartLists });
+              if (scope.smartListId === smartList.id) navigate("/view/inbox");
+            }); },
+          })}
           onAddGroup={() => setGroupDialog({ mode: "create" })}
           onEdit={(list) => setListDialog({ mode: "rename", list })}
           onColor={(list) => setListDialog({ mode: "color", list })}
@@ -304,6 +322,9 @@ export function DesktopShell() {
                 createPending={createTask.isPending}
                 createError={createTask.error ? errorMessage(createTask.error) : null}
                 refreshPending={isRefreshing}
+                sourceLists={scope.smartListId
+                  ? (lists.data || []).filter((list) => currentSmartList?.source_list_ids.includes(list.id))
+                  : undefined}
                 onSearch={setSearch}
                 onSort={setSort}
                 onCreate={(payload) => createTask.mutate(payload, { onSuccess: (task) => openTask(task.id) })}
@@ -338,6 +359,7 @@ export function DesktopShell() {
                 activeTaskId={selectedTaskId}
                 view={scope.view}
                 lists={lists.data || []}
+                showSourceLists={Boolean(scope.smartListId)}
                 loading={tasks.isPending}
                 completedLoading={listScopeId ? completedTasksQuery.isPending : undefined}
                 error={tasks.error}
@@ -445,6 +467,22 @@ export function DesktopShell() {
             }
             setGroupDialog(null);
             await queryClient.invalidateQueries({ queryKey: queryKeys.listGroups });
+          }}
+        />
+      )}
+      {smartListDialog !== undefined && (
+        <SmartListDialog
+          key={smartListDialog?.id || "new"}
+          smartList={smartListDialog || undefined}
+          lists={lists.data || []}
+          tags={tags.data || []}
+          onClose={() => setSmartListDialog(undefined)}
+          onSubmit={async (values) => {
+            if (smartListDialog) await api.updateSmartList(smartListDialog.id, values);
+            else await api.createSmartList(values);
+            setSmartListDialog(undefined);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.smartLists });
+            void queryClient.invalidateQueries({ queryKey: ["tasks"] });
           }}
         />
       )}

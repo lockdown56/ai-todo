@@ -8,6 +8,8 @@ import type {
   CreateTaskInput,
   Health,
   ListGroup,
+  SmartList,
+  SmartListInput,
   Tag,
   Task,
   TaskList,
@@ -257,9 +259,18 @@ export const api = {
     request<ListGroup>(`/api/v1/list-groups/${id}`, json("PATCH", body)),
   deleteGroup: (id: string) => request<void>(`/api/v1/list-groups/${id}`, json("DELETE")),
 
+  smartLists: () => request<SmartList[]>("/api/v1/smart-lists"),
+  createSmartList: (body: SmartListInput) =>
+    request<SmartList>("/api/v1/smart-lists", json("POST", body)),
+  updateSmartList: (id: string, body: Partial<SmartListInput & { sort_order: number }>) =>
+    request<SmartList>(`/api/v1/smart-lists/${id}`, json("PATCH", body)),
+  deleteSmartList: (id: string) =>
+    request<void>(`/api/v1/smart-lists/${id}`, json("DELETE")),
+
   tasks: (params: {
     view?: TaskView;
     listId?: string;
+    smartListId?: string;
     status?: 0 | 2;
     query?: string;
     sort: TaskSort;
@@ -268,6 +279,7 @@ export const api = {
     const search = new URLSearchParams({ sort: params.sort, limit: "100" });
     if (params.view) search.set("view", params.view);
     if (params.listId) search.set("list_id", params.listId);
+    if (params.smartListId) search.set("smart_list_id", params.smartListId);
     if (params.status !== undefined) search.set("status", String(params.status));
     if (params.query) search.set("query", params.query);
     if (params.cursor) search.set("cursor", params.cursor);

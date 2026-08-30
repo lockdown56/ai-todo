@@ -51,6 +51,36 @@ export interface ListGroup {
   updated_at: string;
 }
 
+export type SmartListStatus = "active" | "completed";
+export type SmartListDateMode =
+  | "none" | "overdue" | "today" | "tomorrow" | "this_week" | "next_7_days" | "range";
+
+export interface SmartListFilters {
+  statuses: SmartListStatus[];
+  priorities: Array<0 | 1 | 3 | 5>;
+  tag_ids: string[];
+  date: { mode: SmartListDateMode; start?: string | null; end?: string | null } | null;
+}
+
+export interface SmartList {
+  id: string;
+  name: string;
+  color: string;
+  sort_order: number;
+  source_list_ids: string[];
+  filters: SmartListFilters;
+  task_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SmartListInput {
+  name: string;
+  color: string;
+  source_list_ids: string[];
+  filters: SmartListFilters;
+}
+
 export interface Tag {
   id: string;
   name: string;

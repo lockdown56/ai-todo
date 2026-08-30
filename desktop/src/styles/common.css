@@ -207,3 +207,10 @@
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+.smart-list-dialog { max-height: min(90vh, 760px); overflow-y: auto; }
+.smart-list-dialog-form { gap: 16px; }
+.smart-filter-group { border: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 0; }
+.smart-filter-group legend { display: block; font-size: 14px; font-weight: 500; margin-bottom: 8px; width: 100%; }
+.smart-filter-option { align-items: center; display: inline-flex; font-size: 14px; gap: 7px; min-height: 28px; }
+.smart-filter-select { background: var(--background); border: 1px solid var(--border); border-radius: 6px; min-height: 36px; padding: 0 10px; }
+.smart-date-range { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }

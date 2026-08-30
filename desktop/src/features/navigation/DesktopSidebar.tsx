@@ -25,6 +25,7 @@ import {
   MoreHorizontal,
   Plus,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -34,11 +35,12 @@ import {
   usePointerListSort,
   type SortDragSource,
 } from "@/lib/use-pointer-list-sort";
-import type { ListGroup, TaskList, TaskView } from "@/types";
+import type { ListGroup, SmartList, TaskList, TaskView } from "@/types";
 
 interface Scope {
   view?: TaskView;
   listId?: string;
+  smartListId?: string;
 }
 
 function DropLine() {
@@ -264,6 +266,7 @@ export function DesktopSidebar({
   collapsed,
   currentPath,
   lists,
+  smartLists,
   groups,
   archivedLists,
   showArchived,
@@ -271,6 +274,9 @@ export function DesktopSidebar({
   onToggle,
   onNavigate,
   onAdd,
+  onAddSmartList,
+  onEditSmartList,
+  onDeleteSmartList,
   onAddGroup,
   onEdit,
   onColor,
@@ -289,6 +295,7 @@ export function DesktopSidebar({
   collapsed: boolean;
   currentPath: string;
   lists: TaskList[];
+  smartLists: SmartList[];
   groups: ListGroup[];
   archivedLists: TaskList[];
   showArchived: boolean;
@@ -296,6 +303,9 @@ export function DesktopSidebar({
   onToggle: () => void;
   onNavigate: (path: string) => void;
   onAdd: () => void;
+  onAddSmartList: () => void;
+  onEditSmartList: (smartList: SmartList) => void;
+  onDeleteSmartList: (smartList: SmartList) => void;
   onAddGroup: () => void;
   onEdit: (list: TaskList) => void;
   onColor: (list: TaskList) => void;
@@ -387,6 +397,32 @@ export function DesktopSidebar({
             </Button>
           );
         })}
+      </div>
+      <div className="sidebar-divider" />
+      {!collapsed && <div className="lists-heading"><span>智能清单</span>
+        <Button variant="ghost" size="icon-sm" className="icon-button"
+          onClick={onAddSmartList} aria-label="新建智能清单"><Plus /></Button>
+      </div>}
+      <div className="nav-section">
+        {smartLists.map((smartList) => <div className="custom-list-wrap" key={smartList.id}>
+          <Button variant="ghost"
+            className={`nav-item w-full justify-start ${scope.smartListId === smartList.id ? "active" : ""}`}
+            onClick={() => void onNavigate(`/smart-list/${smartList.id}`)}
+            title={smartList.name}>
+            {collapsed ? <Sparkles style={{ color: smartList.color }} /> : <>
+              <span className="nav-icon-slot"><Sparkles style={{ color: smartList.color }} /></span>
+              <span className="nav-label">{smartList.name}</span>
+              <span className="nav-count">{smartList.task_count}</span>
+            </>}
+          </Button>
+          {!collapsed && <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost"
+            size="icon-sm" className="icon-button list-menu-button"
+            aria-label={`管理智能清单 ${smartList.name}`}><MoreHorizontal /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onEditSmartList(smartList)}>编辑</DropdownMenuItem>
+              <DropdownMenuSeparator /><DropdownMenuItem variant="destructive"
+                onSelect={() => onDeleteSmartList(smartList)}>删除</DropdownMenuItem></DropdownMenuContent>
+          </DropdownMenu>}
+        </div>)}
       </div>
       <div className="sidebar-divider" />
       {!collapsed && (

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -11,7 +11,7 @@ from app.config import get_settings
 from app.constants import DEFAULT_USER_ID
 from app.database import get_session
 from app.errors import ApiError
-from app.models import ChecklistItem, Task, TaskOccurrence
+from app.models import ChecklistItem, Tag, Task, TaskList, TaskOccurrence
 from app.repositories import next_sort_order
 from app.schemas import TaskCreate, TaskPage, TaskResponse, TaskSort, TaskUpdate, TaskView
 from app.services import (
@@ -20,6 +20,7 @@ from app.services import (
     list_tasks,
     recurrence_occurs_on,
     require_list,
+    require_smart_list,
     require_tags,
     require_task,
     restore_task,
@@ -33,6 +34,7 @@ router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 async def get_tasks(
     view: TaskView | None = None,
     list_id: UUID | None = None,
+    smart_list_id: UUID | None = None,
     status: int = Query(default=0, ge=0, le=2),
     query: str | None = None,
     sort: TaskSort = "manual",
@@ -40,9 +42,13 @@ async def get_tasks(
     cursor: str | None = None,
     session: AsyncSession = Depends(get_session),
 ):
-    if bool(view) == bool(list_id):
-        raise ApiError(422, "INVALID_TASK_SCOPE", "view 和 list_id 必须且只能提供一个")
-    if list_id is None and status != 0:
+    if sum(value is not None for value in (view, list_id, smart_list_id)) != 1:
+        raise ApiError(
+            422,
+            "INVALID_TASK_SCOPE",
+            "view、list_id 和 smart_list_id 必须且只能提供一个",
+        )
+    if list_id is None and smart_list_id is None and status != 0:
         raise ApiError(422, "INVALID_TASK_STATUS", "status 仅在使用 list_id 时有效")
     if list_id is not None and status not in (0, 2):
         raise ApiError(422, "INVALID_TASK_STATUS", "status 仅允许 0 或 2")
@@ -50,6 +56,7 @@ async def get_tasks(
         session,
         view=view,
         list_id=list_id,
+        smart_list_id=smart_list_id,
         status=status,
         query_text=query,
         sort=sort,
@@ -57,7 +64,11 @@ async def get_tasks(
         cursor=cursor,
     )
     items = [TaskResponse.model_validate(task) for task in tasks]
-    if view == "completed" or (list_id is not None and status == 2):
+    smart_list = await require_smart_list(session, smart_list_id) if smart_list_id else None
+    include_smart_completed = bool(
+        smart_list and "completed" in smart_list.filters.get("statuses", [])
+    )
+    if view == "completed" or (list_id is not None and status == 2) or include_smart_completed:
         occurrence_query = (
             select(TaskOccurrence)
             .join(Task)
@@ -71,6 +82,49 @@ async def get_tasks(
         )
         if list_id is not None:
             occurrence_query = occurrence_query.where(Task.list_id == list_id)
+        elif smart_list is not None:
+            source_ids = [source.list_id for source in smart_list.sources]
+            occurrence_query = occurrence_query.join(TaskList, TaskList.id == Task.list_id).where(
+                Task.list_id.in_(source_ids),
+                TaskList.archived_at.is_(None),
+                TaskList.deleted_at.is_(None),
+            )
+            priorities = smart_list.filters.get("priorities", [])
+            if priorities:
+                occurrence_query = occurrence_query.where(Task.priority.in_(priorities))
+            tag_ids = smart_list.filters.get("tag_ids", [])
+            if tag_ids:
+                occurrence_query = occurrence_query.where(
+                    Task.tags.any(Tag.id.in_([UUID(value) for value in tag_ids]))
+                )
+            date_filter = smart_list.filters.get("date")
+            if date_filter:
+                timezone = ZoneInfo(get_settings().app_timezone)
+                today = datetime.now(timezone).date()
+                mode = date_filter["mode"]
+                if mode == "none":
+                    occurrence_query = occurrence_query.where(False)
+                elif mode == "overdue":
+                    occurrence_query = occurrence_query.where(
+                        TaskOccurrence.occurrence_date < today
+                    )
+                else:
+                    if mode == "today":
+                        start_date = end_date = today
+                    elif mode == "tomorrow":
+                        start_date = end_date = today + timedelta(days=1)
+                    elif mode == "this_week":
+                        start_date = today - timedelta(days=today.weekday())
+                        end_date = start_date + timedelta(days=6)
+                    elif mode == "next_7_days":
+                        start_date, end_date = today, today + timedelta(days=6)
+                    else:
+                        start_date = date.fromisoformat(date_filter["start"])
+                        end_date = date.fromisoformat(date_filter["end"])
+                    occurrence_query = occurrence_query.where(
+                        TaskOccurrence.occurrence_date >= start_date,
+                        TaskOccurrence.occurrence_date <= end_date,
+                    )
         occurrences = list(await session.scalars(occurrence_query))
         for occurrence in occurrences:
             response = TaskResponse.model_validate(occurrence.task).model_copy(

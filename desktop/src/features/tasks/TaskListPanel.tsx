@@ -29,6 +29,7 @@ export function TaskListPanel({
   activeTaskId,
   view,
   lists,
+  showSourceLists = false,
   loading,
   completedLoading,
   error,
@@ -53,6 +54,7 @@ export function TaskListPanel({
   activeTaskId?: string;
   view?: TaskView;
   lists?: TaskList[];
+  showSourceLists?: boolean;
   loading: boolean;
   completedLoading?: boolean;
   error: unknown;
@@ -182,8 +184,8 @@ export function TaskListPanel({
   const renderTaskRow = (task: Task) => {
     const editing = editingTaskId === task.id;
     const owningList =
-      view === "all" ? lists?.find((list) => list.id === task.list_id) : undefined;
-    const showListTag = view === "all" && Boolean(owningList);
+      view === "all" || showSourceLists ? lists?.find((list) => list.id === task.list_id) : undefined;
+    const showListTag = (view === "all" || showSourceLists) && Boolean(owningList);
     const actionItems = view === "trash"
       ? (
           <>

@@ -50,6 +50,7 @@ class User(TimestampMixin, Base):
     list_groups: Mapped[list[ListGroup]] = relationship(back_populates="user")
     tasks: Mapped[list[Task]] = relationship(back_populates="user")
     tags: Mapped[list[Tag]] = relationship(back_populates="user")
+    smart_lists: Mapped[list[SmartList]] = relationship(back_populates="user")
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(back_populates="user")
 
 
@@ -95,6 +96,38 @@ class TaskList(TimestampMixin, Base):
     user: Mapped[User] = relationship(back_populates="lists")
     group: Mapped[ListGroup | None] = relationship(back_populates="lists")
     tasks: Mapped[list[Task]] = relationship(back_populates="task_list")
+
+
+class SmartList(TimestampMixin, Base):
+    __tablename__ = "smart_lists"
+    __table_args__ = (Index("ix_smart_lists_user_sort", "user_id", "sort_order"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    color: Mapped[str] = mapped_column(String(7), nullable=False, default="#6C5CE7")
+    sort_order: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    filters: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    user: Mapped[User] = relationship(back_populates="smart_lists")
+    sources: Mapped[list[SmartListSource]] = relationship(
+        back_populates="smart_list", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class SmartListSource(Base):
+    __tablename__ = "smart_list_sources"
+    __table_args__ = (Index("ix_smart_list_sources_list", "list_id", "smart_list_id"),)
+
+    smart_list_id: Mapped[UUID] = mapped_column(
+        ForeignKey("smart_lists.id", ondelete="CASCADE"), primary_key=True
+    )
+    list_id: Mapped[UUID] = mapped_column(
+        ForeignKey("task_lists.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    smart_list: Mapped[SmartList] = relationship(back_populates="sources")
+    task_list: Mapped[TaskList] = relationship()
 
 
 class Task(TimestampMixin, Base):

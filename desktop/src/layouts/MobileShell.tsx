@@ -16,6 +16,8 @@ import {
   UserRound,
   SlidersHorizontal,
   RefreshCw,
+  Pencil,
+  Sparkles,
 } from "lucide-react";
 import { useTaskWorkspace } from "@/features/tasks/useTaskWorkspace";
 import { TaskHeader } from "@/features/tasks/TaskHeader";
@@ -27,6 +29,7 @@ import { SettingsPage } from "@/features/account/SettingsPage";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ConnectionError } from "@/components/ConnectionError";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { SmartListDialog } from "@/components/SmartListDialog";
 import { viewNames } from "@/lib/constants";
 import { errorMessage } from "@/lib/error-utils";
 import { sortListsByOrder } from "@/lib/list-reorder";
@@ -37,7 +40,7 @@ import {
 } from "@/lib/use-pointer-list-sort";
 import { api } from "@/api";
 import { queryKeys } from "@/query";
-import type { ListGroup, TaskView, TaskList } from "@/types";
+import type { ListGroup, SmartList, TaskView, TaskList } from "@/types";
 
 const mobileNavItems = [
   { view: "inbox" as TaskView, icon: Inbox, label: "收集箱" },
@@ -71,12 +74,15 @@ export function MobileShell() {
     health,
     lists,
     listGroups,
+    smartLists,
+    tags,
     tasks,
     taskItems,
     completedTasksQuery,
     completedTaskItems,
     listScopeId,
     currentList,
+    currentSmartList,
 
     editorRef,
     quickAddRef,
@@ -97,6 +103,7 @@ export function MobileShell() {
   // 左上角「更多」抽屉的开关状态
   const [moreOpen, setMoreOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [smartListDialog, setSmartListDialog] = useState<SmartList | null | undefined>();
   const refreshAreaRef = useRef<HTMLDivElement>(null);
   const pullStartY = useRef<number | null>(null);
   const pullStartX = useRef<number | null>(null);
@@ -107,6 +114,8 @@ export function MobileShell() {
 
   const currentTitle = scope.listId
     ? currentList?.name || "清单"
+    : scope.smartListId
+      ? currentSmartList?.name || "智能清单"
     : viewNames[scope.view || "inbox"];
   const pullRefreshDisabled =
     isProfileRoute || isSettingsRoute || moreOpen || composerOpen || Boolean(selectedTaskId) || isRefreshing;
@@ -290,6 +299,7 @@ export function MobileShell() {
               activeTaskId={selectedTaskId}
               view={scope.view}
               lists={lists.data || []}
+              showSourceLists={Boolean(scope.smartListId)}
               loading={tasks.isPending}
               completedLoading={listScopeId ? completedTasksQuery.isPending : undefined}
               error={tasks.error}
@@ -381,9 +391,11 @@ export function MobileShell() {
 
       {composerOpen && (
         <MobileTaskComposer
-          lists={lists.data || []}
+          lists={scope.smartListId
+            ? (lists.data || []).filter((list) => currentSmartList?.source_list_ids.includes(list.id))
+            : lists.data || []}
           defaultListId={
-            scope.listId
+            scope.smartListId ? undefined : scope.listId
               || lists.data?.find((list) => list.system_type === "inbox")?.id
           }
           pending={createTask.isPending}
@@ -400,12 +412,38 @@ export function MobileShell() {
       {moreOpen && (
         <MobileMoreDrawer
           lists={lists.data || []}
+          smartLists={smartLists.data || []}
           groups={listGroups.data || []}
           currentPath={location.pathname}
           onNavigate={navigateFromDrawer}
+          onAddSmartList={() => { setMoreOpen(false); setSmartListDialog(null); }}
+          onEditSmartList={(item) => { setMoreOpen(false); setSmartListDialog(item); }}
+          onDeleteSmartList={(item) => { setMoreOpen(false); setConfirm({
+            title: "删除智能清单",
+            message: `“${item.name}”将被删除，实际清单和任务会保留。`,
+            action: () => { void api.deleteSmartList(item.id).then(() => {
+              setConfirm(null);
+              void queryClient.invalidateQueries({ queryKey: queryKeys.smartLists });
+              if (scope.smartListId === item.id) navigate("/view/inbox");
+            }); },
+          }); }}
           onClose={() => setMoreOpen(false)}
         />
       )}
+
+      {smartListDialog !== undefined && <SmartListDialog
+        smartList={smartListDialog || undefined}
+        lists={lists.data || []}
+        tags={tags.data || []}
+        onClose={() => setSmartListDialog(undefined)}
+        onSubmit={async (values) => {
+          if (smartListDialog) await api.updateSmartList(smartListDialog.id, values);
+          else await api.createSmartList(values);
+          setSmartListDialog(undefined);
+          await queryClient.invalidateQueries({ queryKey: queryKeys.smartLists });
+          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+        }}
+      />}
 
       {confirm && (
         <ConfirmDialog
@@ -449,15 +487,23 @@ function MobileDropLine() {
 
 function MobileMoreDrawer({
   lists,
+  smartLists,
   groups,
   currentPath,
   onNavigate,
+  onAddSmartList,
+  onEditSmartList,
+  onDeleteSmartList,
   onClose,
 }: {
   lists: TaskList[];
+  smartLists: SmartList[];
   groups: ListGroup[];
   currentPath: string;
   onNavigate: (path: string) => void;
+  onAddSmartList: () => void;
+  onEditSmartList: (item: SmartList) => void;
+  onDeleteSmartList: (item: SmartList) => void;
   onClose: () => void;
 }) {
   const customLists = lists.filter((list) => !list.system_type);
@@ -546,6 +592,26 @@ function MobileMoreDrawer({
               </Button>
             ))}
           </nav>
+          <div className="mobile-more-divider" />
+          <div className="mobile-more-section">
+            <span className="mobile-more-section-title">智能清单</span>
+            {smartLists.map((item) => (
+              <div className="mobile-smart-list-row" key={item.id}>
+                <Button variant="ghost"
+                  className={`mobile-more-item ${currentPath === `/smart-list/${item.id}` ? "active" : ""}`}
+                  onClick={() => onNavigate(`/smart-list/${item.id}`)}>
+                  <Sparkles style={{ color: item.color }} /><span>{item.name}</span>
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => onEditSmartList(item)}
+                  aria-label={`编辑 ${item.name}`}><Pencil /></Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => onDeleteSmartList(item)}
+                  aria-label={`删除 ${item.name}`}><Trash2 /></Button>
+              </div>
+            ))}
+            <Button variant="ghost" className="mobile-more-item" onClick={onAddSmartList}>
+              <Plus /><span>新建智能清单</span>
+            </Button>
+          </div>
           {customLists.length > 0 && (
             <>
               <div className="mobile-more-divider" />

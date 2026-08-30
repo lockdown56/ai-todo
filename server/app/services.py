@@ -19,8 +19,18 @@ from app.constants import (
     SORT_GAP,
 )
 from app.errors import ApiError
-from app.models import ApiKey, ListGroup, RefreshToken, Tag, Task, TaskList, TaskOccurrence, User
-from app.repositories import get_group, get_list, get_task, task_with_details
+from app.models import (
+    ApiKey,
+    ListGroup,
+    RefreshToken,
+    SmartList,
+    Tag,
+    Task,
+    TaskList,
+    TaskOccurrence,
+    User,
+)
+from app.repositories import get_group, get_list, get_smart_list, get_task, task_with_details
 from app.schemas import TaskSort, TaskView
 
 API_KEY_PREFIX = "tdl_"
@@ -121,6 +131,58 @@ async def require_group(session: AsyncSession, group_id: UUID) -> ListGroup:
     if group is None:
         raise ApiError(404, "GROUP_NOT_FOUND", "分组不存在")
     return group
+
+
+async def require_smart_list(session: AsyncSession, smart_list_id: UUID):
+    smart_list = await get_smart_list(session, smart_list_id)
+    if smart_list is None:
+        raise ApiError(404, "SMART_LIST_NOT_FOUND", "智能清单不存在")
+    return smart_list
+
+
+def apply_smart_list_filters(query, smart_list: SmartList):
+    source_ids = [source.list_id for source in smart_list.sources]
+    filters = smart_list.filters
+    statuses = [0 if value == "active" else 2 for value in filters.get("statuses", ["active"])]
+    query = query.join(TaskList, TaskList.id == Task.list_id).where(
+        Task.list_id.in_(source_ids),
+        Task.deleted_at.is_(None),
+        Task.status.in_(statuses),
+        TaskList.archived_at.is_(None),
+        TaskList.deleted_at.is_(None),
+    )
+    priorities = filters.get("priorities", [])
+    if priorities:
+        query = query.where(Task.priority.in_(priorities))
+    tag_ids = filters.get("tag_ids", [])
+    if tag_ids:
+        query = query.where(Task.tags.any(Tag.id.in_([UUID(value) for value in tag_ids])))
+    date_filter = filters.get("date")
+    if not date_filter:
+        return query
+    mode = date_filter["mode"]
+    timezone = ZoneInfo(get_settings().app_timezone)
+    local_today = datetime.now(timezone).date()
+    if mode == "none":
+        return query.where(Task.due_at.is_(None), Task.recurrence_type.is_(None))
+    if mode == "overdue":
+        start = datetime.combine(local_today, datetime.min.time(), timezone)
+        return query.where(Task.due_at < start)
+    if mode == "today":
+        start_date = end_date = local_today
+    elif mode == "tomorrow":
+        start_date = end_date = local_today + timedelta(days=1)
+    elif mode == "this_week":
+        start_date = local_today - timedelta(days=local_today.weekday())
+        end_date = start_date + timedelta(days=6)
+    elif mode == "next_7_days":
+        start_date, end_date = local_today, local_today + timedelta(days=6)
+    else:
+        start_date = date.fromisoformat(date_filter["start"])
+        end_date = date.fromisoformat(date_filter["end"])
+    start = datetime.combine(start_date, datetime.min.time(), timezone)
+    end = datetime.combine(end_date + timedelta(days=1), datetime.min.time(), timezone)
+    return query.where(Task.due_at >= start, Task.due_at < end)
 
 
 async def require_tags(session: AsyncSession, tag_ids: list[UUID]) -> list[Tag]:
@@ -295,6 +357,7 @@ async def list_tasks(
     *,
     view: TaskView | None,
     list_id: UUID | None,
+    smart_list_id: UUID | None = None,
     status: int = 0,
     query_text: str | None,
     sort: TaskSort,
@@ -308,7 +371,10 @@ async def list_tasks(
         TaskList.archived_at.is_not(None),
     )
 
-    if list_id:
+    if smart_list_id:
+        smart_list = await require_smart_list(session, smart_list_id)
+        query = apply_smart_list_filters(query, smart_list)
+    elif list_id:
         await require_list(session, list_id)
         query = query.where(
             Task.list_id == list_id,

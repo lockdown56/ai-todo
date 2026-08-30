@@ -36,6 +36,7 @@ import { isSameLocalDay } from "@/lib/date-utils";
 interface Scope {
   view?: TaskView;
   listId?: string;
+  smartListId?: string;
 }
 
 interface EditorHandle {
@@ -82,12 +83,17 @@ export function useTaskWorkspace() {
   const refreshingRef = useRef(false);
   const completedRemovalTimersRef = useRef(new Set<number>());
 
-  const scope: Scope =
-    params.listId !== undefined
-      ? { listId: params.listId }
+  const scope: Scope = params.listId !== undefined
+    ? { listId: params.listId }
+    : params.smartListId !== undefined
+      ? { smartListId: params.smartListId }
       : { view: (params.view as TaskView | undefined) || "inbox" };
   const selectedTaskId = new URLSearchParams(location.search).get("task") || undefined;
-  const scopeKey = scope.listId ? `list:${scope.listId}` : `view:${scope.view}`;
+  const scopeKey = scope.listId
+    ? `list:${scope.listId}`
+    : scope.smartListId
+      ? `smart-list:${scope.smartListId}`
+      : `view:${scope.view}`;
   const isSettingsRoute = location.pathname === "/settings";
   const isProfileRoute = location.pathname === "/profile";
   const isUtilityRoute = isSettingsRoute || isProfileRoute;
@@ -137,6 +143,7 @@ export function useTaskWorkspace() {
   });
   const lists = useQuery({ queryKey: queryKeys.lists, queryFn: api.lists });
   const listGroups = useQuery({ queryKey: queryKeys.listGroups, queryFn: api.listGroups });
+  const smartLists = useQuery({ queryKey: queryKeys.smartLists, queryFn: api.smartLists });
   const trashLists = useQuery({
     queryKey: queryKeys.trashLists,
     queryFn: api.trashLists,
@@ -161,6 +168,7 @@ export function useTaskWorkspace() {
       api.tasks({
         view: scope.view,
         listId: scope.listId,
+        smartListId: scope.smartListId,
         query: debouncedSearch,
         sort,
         cursor: pageParam || undefined,
@@ -193,6 +201,7 @@ export function useTaskWorkspace() {
     [completedTasksQuery.data],
   );
   const currentList = lists.data?.find((item) => item.id === scope.listId);
+  const currentSmartList = smartLists.data?.find((item) => item.id === scope.smartListId);
 
   const refreshWorkspaceData = useCallback(async () => {
     if (refreshingRef.current) return;
@@ -202,6 +211,7 @@ export function useTaskWorkspace() {
       const refreshes: Promise<unknown>[] = [
         lists.refetch(),
         listGroups.refetch(),
+        smartLists.refetch(),
         tags.refetch(),
         tasks.refetch(),
       ];
@@ -222,6 +232,7 @@ export function useTaskWorkspace() {
     archivedLists,
     completedTasksQuery,
     listGroups,
+    smartLists,
     listScopeId,
     lists,
     queryClient,
@@ -284,6 +295,7 @@ export function useTaskWorkspace() {
       if (scope.listId) {
         return task.deleted_at === null && task.status === 0 && task.list_id === scope.listId;
       }
+      if (scope.smartListId) return false;
       if (scope.view === "trash") return task.deleted_at !== null;
       if (scope.view === "completed") return task.deleted_at === null && task.status === 2;
       if (task.deleted_at !== null || task.status !== 0) return false;
@@ -293,12 +305,12 @@ export function useTaskWorkspace() {
       }
       return true;
     },
-    [debouncedSearch, listScopeId, scope.listId, scope.view],
+    [debouncedSearch, listScopeId, scope.listId, scope.smartListId, scope.view],
   );
 
   const createTask = useMutation({
     mutationFn: ({ openAfterCreate: _openAfterCreate, ...input }: CreateTaskMutationInput) => {
-      const defaultListId = scope.listId
+      const defaultListId = scope.smartListId ? undefined : scope.listId
         || lists.data?.find((item) => item.system_type === "inbox")?.id;
       return api.createTask({
         ...input,
@@ -316,6 +328,7 @@ export function useTaskWorkspace() {
         );
       }
       invalidateTaskData(queryClient, task.id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.smartLists });
     },
   });
 
@@ -462,6 +475,7 @@ export function useTaskWorkspace() {
     health,
     lists,
     listGroups,
+    smartLists,
     trashLists,
     archivedLists,
     tags,
@@ -471,6 +485,7 @@ export function useTaskWorkspace() {
     completedTaskItems,
     listScopeId,
     currentList,
+    currentSmartList,
     isSettingsRoute,
     isProfileRoute,
     isUtilityRoute,

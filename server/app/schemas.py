@@ -139,6 +139,98 @@ class ListResponse(ApiModel):
     updated_at: datetime
 
 
+SmartListStatus = Literal["active", "completed"]
+SmartListDateMode = Literal[
+    "none", "overdue", "today", "tomorrow", "this_week", "next_7_days", "range"
+]
+
+
+class SmartListDateFilter(BaseModel):
+    mode: SmartListDateMode
+    start: date | None = None
+    end: date | None = None
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "SmartListDateFilter":
+        if self.mode == "range":
+            if self.start is None or self.end is None:
+                raise ValueError("自定义日期范围必须提供开始和结束日期")
+            if self.end < self.start:
+                raise ValueError("结束日期不得早于开始日期")
+        return self
+
+
+class SmartListFilters(BaseModel):
+    statuses: list[SmartListStatus] = Field(default_factory=lambda: ["active"])
+    priorities: list[Literal[0, 1, 3, 5]] = Field(default_factory=list)
+    tag_ids: list[UUID] = Field(default_factory=list)
+    date: SmartListDateFilter | None = None
+
+    @field_validator("statuses")
+    @classmethod
+    def validate_statuses(cls, value: list[SmartListStatus]) -> list[SmartListStatus]:
+        result = list(dict.fromkeys(value))
+        if not result:
+            raise ValueError("至少选择一个任务状态")
+        return result
+
+    @field_validator("priorities", "tag_ids")
+    @classmethod
+    def unique_values(cls, value: list):
+        return list(dict.fromkeys(value))
+
+
+class SmartListCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    color: str = Field(default="#6C5CE7", pattern=HEX_COLOR)
+    source_list_ids: list[UUID] = Field(min_length=1)
+    filters: SmartListFilters = Field(default_factory=SmartListFilters)
+
+    @field_validator("name")
+    @classmethod
+    def clean_smart_list_name(cls, value: str) -> str:
+        if not (cleaned := value.strip()):
+            raise ValueError("智能清单名称不能为空")
+        return cleaned
+
+    @field_validator("source_list_ids")
+    @classmethod
+    def unique_sources(cls, value: list[UUID]) -> list[UUID]:
+        return list(dict.fromkeys(value))
+
+
+class SmartListUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    color: str | None = Field(default=None, pattern=HEX_COLOR)
+    sort_order: int | None = None
+    source_list_ids: list[UUID] | None = Field(default=None, min_length=1)
+    filters: SmartListFilters | None = None
+
+    @field_validator("name")
+    @classmethod
+    def clean_smart_list_update_name(cls, value: str | None) -> str | None:
+        if value is not None and not (value := value.strip()):
+            raise ValueError("智能清单名称不能为空")
+        return value
+
+    @field_validator("source_list_ids")
+    @classmethod
+    def unique_update_sources(cls, value: list[UUID] | None) -> list[UUID] | None:
+        return list(dict.fromkeys(value)) if value is not None else None
+
+
+class SmartListResponse(ApiModel):
+    id: UUID
+    name: str
+    color: str
+    sort_order: int
+    source_list_ids: list[UUID]
+    filters: SmartListFilters
+    task_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
 class TagCreate(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     color: str = Field(default="#6C5CE7", pattern=HEX_COLOR)

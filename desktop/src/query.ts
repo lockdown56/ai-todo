@@ -5,6 +5,7 @@ export const queryKeys = {
   trashLists: ["lists", "trash"] as const,
   archivedLists: ["lists", "archived"] as const,
   listGroups: ["list-groups"] as const,
+  smartLists: ["smart-lists"] as const,
   tasks: (scope: string, query: string, sort: string, status?: number) =>
     status === undefined
       ? (["tasks", scope, query, sort] as const)

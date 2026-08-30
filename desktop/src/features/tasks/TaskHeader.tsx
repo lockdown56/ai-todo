@@ -40,6 +40,7 @@ export function TaskHeader({
   onSort,
   onCreate,
   onRefresh,
+  sourceLists,
 }: {
   title: string;
   count: number;
@@ -56,10 +57,12 @@ export function TaskHeader({
   onSort: (sort: TaskSort) => void;
   onCreate: (payload: CreateTaskInput) => void;
   onRefresh?: () => void | Promise<void>;
+  sourceLists?: Array<{ id: string; name: string }>;
 }) {
   const [titleInput, setTitleInput] = useState("");
   const [quickPriority, setQuickPriority] = useState<0 | 1 | 3 | 5>(0);
   const [quickDueAt, setQuickDueAt] = useState<string | null>(null);
+  const [quickListId, setQuickListId] = useState("");
   const [searchOpen, setSearchOpen] = useState(Boolean(search));
   const [refreshSpin, setRefreshSpin] = useState(false);
   const refreshSpinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -186,10 +189,11 @@ export function TaskHeader({
             onSubmit={(event) => {
               event.preventDefault();
               const cleaned = titleInput.trim();
-              if (!cleaned) return;
+              if (!cleaned || (sourceLists && !quickListId)) return;
               onCreate({
                 title: cleaned,
                 priority: quickPriority,
+                ...(quickListId ? { list_id: quickListId } : {}),
                 ...(quickDueAt ? { due_at: quickDueAt, is_all_day: true } : {}),
               });
               setTitleInput("");
@@ -246,6 +250,11 @@ export function TaskHeader({
                 <X />
               </button>
             )}
+            {sourceLists && <select className="smart-filter-select" value={quickListId}
+              aria-label="选择任务所属清单" onChange={(event) => setQuickListId(event.target.value)}>
+              <option value="">选择清单</option>
+              {sourceLists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}
+            </select>}
           </form>
           {createError && <div className="inline-error">{createError}</div>}
         </>

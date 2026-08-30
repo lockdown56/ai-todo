@@ -186,6 +186,7 @@ export const handlers = [
   http.get("http://127.0.0.1:8000/api/v1/lists/archived", () =>
     HttpResponse.json([]),
   ),
+  http.get("http://127.0.0.1:8000/api/v1/smart-lists", () => HttpResponse.json([])),
   http.get("http://127.0.0.1:8000/api/v1/list-groups", () =>
     HttpResponse.json([]),
   ),

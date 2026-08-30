@@ -751,3 +751,8 @@
     padding: 12px;
   }
 }
+.mobile-smart-list-row {
+  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}

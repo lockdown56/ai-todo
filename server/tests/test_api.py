@@ -8,6 +8,109 @@ from app.models import RefreshToken
 
 
 @pytest.mark.asyncio
+async def test_smart_list_crud_filters_and_source_lifecycle(client):
+    work = (await client.post("/api/v1/lists", json={"name": "工作", "color": "#336699"})).json()
+    personal = (
+        await client.post("/api/v1/lists", json={"name": "生活", "color": "#663399"})
+    ).json()
+    tag = (await client.post("/api/v1/tags", json={"name": "重点", "color": "#CC0000"})).json()
+    matching = (
+        await client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "匹配任务",
+                "list_id": work["id"],
+                "priority": 5,
+                "tag_ids": [tag["id"]],
+            },
+        )
+    ).json()
+    await client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "优先级不匹配",
+            "list_id": personal["id"],
+            "priority": 1,
+        },
+    )
+
+    created = await client.post(
+        "/api/v1/smart-lists",
+        json={
+            "name": "重点汇总",
+            "color": "#123456",
+            "source_list_ids": [work["id"], personal["id"]],
+            "filters": {
+                "statuses": ["active"],
+                "priorities": [5],
+                "tag_ids": [tag["id"]],
+                "date": None,
+            },
+        },
+    )
+    assert created.status_code == 201
+    smart_list = created.json()
+    assert smart_list["source_list_ids"] == [work["id"], personal["id"]]
+
+    listed = await client.get("/api/v1/smart-lists")
+    assert listed.json()[0]["task_count"] == 1
+    tasks = await client.get(
+        "/api/v1/tasks",
+        params={
+            "smart_list_id": smart_list["id"],
+            "sort": "due_asc",
+        },
+    )
+    assert [item["id"] for item in tasks.json()["items"]] == [matching["id"]]
+
+    await client.post(f"/api/v1/lists/{work['id']}/archive")
+    tasks = await client.get("/api/v1/tasks", params={"smart_list_id": smart_list["id"]})
+    assert tasks.json()["items"] == []
+    await client.post(f"/api/v1/lists/{work['id']}/unarchive")
+    tasks = await client.get("/api/v1/tasks", params={"smart_list_id": smart_list["id"]})
+    assert [item["id"] for item in tasks.json()["items"]] == [matching["id"]]
+
+    deleted = await client.delete(f"/api/v1/smart-lists/{smart_list['id']}")
+    assert deleted.status_code == 204
+    assert (await client.get("/api/v1/smart-lists")).json() == []
+
+
+@pytest.mark.asyncio
+async def test_smart_list_validation_and_task_scope(client):
+    task_list = (
+        await client.post("/api/v1/lists", json={"name": "来源", "color": "#336699"})
+    ).json()
+    invalid = await client.post(
+        "/api/v1/smart-lists",
+        json={
+            "name": "无来源",
+            "source_list_ids": [],
+            "filters": {"statuses": []},
+        },
+    )
+    assert invalid.status_code == 422
+
+    smart_list = (
+        await client.post(
+            "/api/v1/smart-lists",
+            json={
+                "name": "汇总",
+                "source_list_ids": [task_list["id"]],
+            },
+        )
+    ).json()
+    ambiguous = await client.get(
+        "/api/v1/tasks",
+        params={
+            "view": "all",
+            "smart_list_id": smart_list["id"],
+        },
+    )
+    assert ambiguous.status_code == 422
+    assert ambiguous.json()["error"]["code"] == "INVALID_TASK_SCOPE"
+
+
+@pytest.mark.asyncio
 async def test_authentication_is_required_and_login_returns_current_user(client):
     authorization = client.headers.pop("Authorization")
     unauthorized = await client.get("/api/v1/lists")

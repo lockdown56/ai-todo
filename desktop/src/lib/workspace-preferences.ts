@@ -67,7 +67,9 @@ export function setLastWorkspaceRoute(pathname: string, search = ""): void {
 export function getTaskSort(scopeKey: string): TaskSort {
   const sorts = readJsonRecord(TASK_SORTS_KEY);
   const sort = sorts[scopeKey];
-  return sort && VALID_SORTS.has(sort as TaskSort) ? (sort as TaskSort) : "manual";
+  return sort && VALID_SORTS.has(sort as TaskSort)
+    ? (sort as TaskSort)
+    : scopeKey.startsWith("smart-list:") ? "due_asc" : "manual";
 }
 
 export function setTaskSort(scopeKey: string, sort: TaskSort): void {
