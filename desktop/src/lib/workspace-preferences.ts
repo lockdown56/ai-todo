@@ -3,6 +3,7 @@ import type { TaskSort, TaskView } from "@/types";
 const LAST_ROUTE_KEY = "todo-last-workspace-route";
 const TASK_SORTS_KEY = "todo-task-sorts";
 const SELECTED_TASKS_KEY = "todo-selected-tasks";
+const COLLAPSED_TASK_SECTIONS_KEY = "todo-collapsed-task-sections";
 
 const VALID_SORTS = new Set<TaskSort>([
   "manual",
@@ -91,6 +92,25 @@ export function setSelectedTaskId(scopeKey: string, taskId: string | null): void
     delete tasks[scopeKey];
   }
   writeJsonRecord(SELECTED_TASKS_KEY, tasks);
+}
+
+export type TaskSectionKey = "overdue" | "completed";
+
+export function getTaskSectionCollapsed(scopeKey: string, sectionKey: TaskSectionKey): boolean {
+  const sections = readJsonRecord(COLLAPSED_TASK_SECTIONS_KEY);
+  return sections[`${scopeKey}:${sectionKey}`] === "true";
+}
+
+export function setTaskSectionCollapsed(
+  scopeKey: string,
+  sectionKey: TaskSectionKey,
+  collapsed: boolean,
+): void {
+  const sections = readJsonRecord(COLLAPSED_TASK_SECTIONS_KEY);
+  const key = `${scopeKey}:${sectionKey}`;
+  if (collapsed) sections[key] = "true";
+  else delete sections[key];
+  writeJsonRecord(COLLAPSED_TASK_SECTIONS_KEY, sections);
 }
 
 export function getDefaultWorkspaceRoute(): string {

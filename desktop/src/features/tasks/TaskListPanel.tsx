@@ -1,4 +1,4 @@
-import { useRef, useState, useLayoutEffect } from "react";
+import { useEffect, useRef, useState, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -14,9 +14,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Archive, CircleAlert, LoaderCircle, MoreHorizontal, Repeat2, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, CircleAlert, LoaderCircle, MoreHorizontal, Repeat2, RotateCcw, Trash2 } from "lucide-react";
 import { errorMessage } from "@/lib/error-utils";
 import { formatDue, dueDateTone } from "@/lib/date-utils";
+import { getTaskSectionCollapsed, setTaskSectionCollapsed } from "@/lib/workspace-preferences";
 import type { Task, TaskList, TaskView } from "@/types";
 
 function PanelState({ icon, title, description }: { icon: React.ReactNode; title: string; description?: string }) {
@@ -27,6 +28,7 @@ export function TaskListPanel({
   tasks,
   completedTasks,
   overdueTasks,
+  scopeKey,
   activeTaskId,
   view,
   lists,
@@ -57,6 +59,7 @@ export function TaskListPanel({
   tasks: Task[];
   completedTasks?: Task[];
   overdueTasks?: Task[];
+  scopeKey: string;
   activeTaskId?: string;
   view?: TaskView;
   lists?: TaskList[];
@@ -89,7 +92,32 @@ export function TaskListPanel({
   const [editTitle, setEditTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [inlineError, setInlineError] = useState("");
+  const [overdueCollapsed, setOverdueCollapsed] = useState(
+    () => getTaskSectionCollapsed(scopeKey, "overdue"),
+  );
+  const [completedCollapsed, setCompletedCollapsed] = useState(
+    () => getTaskSectionCollapsed(scopeKey, "completed"),
+  );
   const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setOverdueCollapsed(getTaskSectionCollapsed(scopeKey, "overdue"));
+    setCompletedCollapsed(getTaskSectionCollapsed(scopeKey, "completed"));
+  }, [scopeKey]);
+
+  const toggleSection = (section: "overdue" | "completed") => {
+    if (section === "overdue") {
+      setOverdueCollapsed((current) => {
+        setTaskSectionCollapsed(scopeKey, section, !current);
+        return !current;
+      });
+      return;
+    }
+    setCompletedCollapsed((current) => {
+      setTaskSectionCollapsed(scopeKey, section, !current);
+      return !current;
+    });
+  };
 
   useLayoutEffect(() => {
     if (!editingTaskId) return;
@@ -177,7 +205,8 @@ export function TaskListPanel({
   const hasOverdueTasks = (overdueTasks?.length || 0) > 0;
 
   if (!hasActiveTasks && !hasCompletedTasks && !hasOverdueTasks) {
-    if ((showCompletedSection && completedLoading) || overdueLoading) {
+    if ((showCompletedSection && completedLoading && !completedCollapsed)
+      || (overdueLoading && !overdueCollapsed)) {
       return <PanelState icon={<LoaderCircle className="spin" />} title="正在加载任务" />;
     }
     const messages: Record<TaskView | "list", [string, string]> = {
@@ -371,38 +400,48 @@ export function TaskListPanel({
           onLoadMore();
           return;
         }
-        if (overdueHasNext && onLoadMoreOverdue) {
+        if (!overdueCollapsed && overdueHasNext && onLoadMoreOverdue) {
           onLoadMoreOverdue();
           return;
         }
-        if (completedHasNext && onLoadMoreCompleted) onLoadMoreCompleted();
+        if (!completedCollapsed && completedHasNext && onLoadMoreCompleted) onLoadMoreCompleted();
       }}
     >
       {tasks.map(renderTaskRow)}
       {(hasOverdueTasks || overdueLoading) && (
         <div className="task-section">
-          <div className="task-section-label">已过期</div>
-          {overdueTasks?.map(renderTaskRow)}
-          {overdueLoading && !hasOverdueTasks && (
+          <button type="button" className="task-section-label"
+            aria-label={`${overdueCollapsed ? "展开" : "收起"}已过期区段`}
+            aria-expanded={!overdueCollapsed} onClick={() => toggleSection("overdue")}>
+            <ChevronDown className={overdueCollapsed ? "collapsed" : ""} />
+            <span>已过期</span>
+          </button>
+          {!overdueCollapsed && overdueTasks?.map(renderTaskRow)}
+          {!overdueCollapsed && overdueLoading && !hasOverdueTasks && (
             <div className="next-page"><LoaderCircle className="spin" /> 加载已过期任务</div>
           )}
         </div>
       )}
       {showCompletedSection && (hasCompletedTasks || completedLoading) && (
         <div className="task-section">
-          <div className="task-section-label">已完成</div>
-          {completedTasks?.map(renderTaskRow)}
-          {completedLoading && !hasCompletedTasks && (
+          <button type="button" className="task-section-label"
+            aria-label={`${completedCollapsed ? "展开" : "收起"}已完成区段`}
+            aria-expanded={!completedCollapsed} onClick={() => toggleSection("completed")}>
+            <ChevronDown className={completedCollapsed ? "collapsed" : ""} />
+            <span>已完成</span>
+          </button>
+          {!completedCollapsed && completedTasks?.map(renderTaskRow)}
+          {!completedCollapsed && completedLoading && !hasCompletedTasks && (
             <div className="next-page"><LoaderCircle className="spin" /> 加载已完成任务</div>
           )}
         </div>
       )}
       {inlineError && <div className="inline-error task-list-error">{inlineError}</div>}
       {fetchingNext && <div className="next-page"><LoaderCircle className="spin" /> 加载更多</div>}
-      {overdueFetchingNext && (
+      {!overdueCollapsed && overdueFetchingNext && (
         <div className="next-page"><LoaderCircle className="spin" /> 加载更多已过期任务</div>
       )}
-      {completedFetchingNext && (
+      {!completedCollapsed && completedFetchingNext && (
         <div className="next-page"><LoaderCircle className="spin" /> 加载更多已完成</div>
       )}
     </div>

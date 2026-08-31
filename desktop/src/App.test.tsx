@@ -290,6 +290,7 @@ describe("AI 清单 app", () => {
   });
 
   it("shows overdue tasks below today's tasks in the today view", async () => {
+    const user = userEvent.setup();
     const today = new Date();
     today.setHours(10, 0, 0, 0);
     const yesterday = new Date(today);
@@ -313,6 +314,17 @@ describe("AI 清单 app", () => {
       todayTitle.compareDocumentPosition(overdueTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(container.querySelector(".task-section")?.textContent).toContain("昨天截止");
+
+    const overdueSection = screen.getByRole("button", { name: "收起已过期区段" });
+    await user.click(overdueSection);
+    expect(overdueSection).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("昨天截止")).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("todo-collapsed-task-sections") || "{}"))
+      .toEqual({ "view:today:overdue": "true" });
+
+    overdueSection.focus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("昨天截止")).toBeInTheDocument();
   });
 
   it("renders list actions outside the scrollable list container", async () => {
@@ -688,12 +700,15 @@ describe("AI 清单 app", () => {
   });
 
   it("shows completed tasks in inbox below active tasks", async () => {
+    const user = userEvent.setup();
     renderApp("/view/inbox");
 
     expect(await screen.findByRole("heading", { name: "收集箱" })).toBeInTheDocument();
     expect(await screen.findByText("编写测试")).toBeInTheDocument();
     expect(document.querySelector(".task-section-label")).toHaveTextContent("已完成");
     expect(screen.getByText("收集箱已完成")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "收起已完成区段" }));
+    expect(screen.queryByText("收集箱已完成")).not.toBeInTheDocument();
   });
 
   it("shows completed tasks in a separate section when a list is selected", async () => {

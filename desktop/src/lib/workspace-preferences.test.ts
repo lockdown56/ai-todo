@@ -3,10 +3,12 @@ import {
   getDefaultWorkspaceRoute,
   getLastWorkspaceRoute,
   getSelectedTaskId,
+  getTaskSectionCollapsed,
   getTaskSort,
   isWorkspaceRoute,
   setLastWorkspaceRoute,
   setSelectedTaskId,
+  setTaskSectionCollapsed,
   setTaskSort,
 } from "./workspace-preferences";
 
@@ -49,5 +51,22 @@ describe("workspace-preferences", () => {
 
     setSelectedTaskId("view:inbox", null);
     expect(getSelectedTaskId("view:inbox")).toBeNull();
+  });
+
+  it("persists collapsed task sections per scope", () => {
+    expect(getTaskSectionCollapsed("view:today", "overdue")).toBe(false);
+    setTaskSectionCollapsed("view:today", "overdue", true);
+
+    expect(getTaskSectionCollapsed("view:today", "overdue")).toBe(true);
+    expect(getTaskSectionCollapsed("view:today", "completed")).toBe(false);
+    expect(getTaskSectionCollapsed("list:work", "overdue")).toBe(false);
+
+    setTaskSectionCollapsed("view:today", "overdue", false);
+    expect(getTaskSectionCollapsed("view:today", "overdue")).toBe(false);
+  });
+
+  it("falls back to expanded sections when stored data is invalid", () => {
+    localStorage.setItem("todo-collapsed-task-sections", "invalid-json");
+    expect(getTaskSectionCollapsed("view:today", "overdue")).toBe(false);
   });
 });

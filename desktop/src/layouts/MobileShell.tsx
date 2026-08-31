@@ -60,6 +60,7 @@ export function MobileShell() {
   const queryClient = useQueryClient();
   const {
     scope,
+    scopeKey,
     selectedTaskId,
     search,
     setSearch,
@@ -299,6 +300,7 @@ export function MobileShell() {
               tasks={taskItems}
               overdueTasks={scope.view === "today" ? overdueTaskItems : undefined}
               completedTasks={listScopeId ? completedTaskItems : undefined}
+              scopeKey={scopeKey}
               activeTaskId={selectedTaskId}
               view={scope.view}
               lists={lists.data || []}

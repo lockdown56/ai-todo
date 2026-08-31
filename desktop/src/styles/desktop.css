@@ -942,11 +942,31 @@ body.is-list-sorting .sortable-list-item {
 }
 
 .task-section-label {
+  align-items: center;
+  border-radius: 6px;
+  display: flex;
+  gap: 4px;
+  width: 100%;
   padding: 8px 10px 6px;
   color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+
+.task-section-label:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.task-section-label svg {
+  height: 14px;
+  transition: transform 150ms ease;
+  width: 14px;
+}
+
+.task-section-label svg.collapsed {
+  transform: rotate(-90deg);
 }
 
 .task-row {

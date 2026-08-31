@@ -29,6 +29,7 @@ export function DesktopShell() {
   const [smartListDialog, setSmartListDialog] = useState<SmartList | null | undefined>();
   const {
     scope,
+    scopeKey,
     selectedTaskId,
     search,
     setSearch,
@@ -359,6 +360,7 @@ export function DesktopShell() {
                 tasks={taskItems}
                 overdueTasks={scope.view === "today" ? overdueTaskItems : undefined}
                 completedTasks={listScopeId ? completedTaskItems : undefined}
+                scopeKey={scopeKey}
                 activeTaskId={selectedTaskId}
                 view={scope.view}
                 lists={lists.data || []}
