@@ -44,7 +44,7 @@ async def get_tasks(
     list_id: UUID | None = None,
     smart_list_id: UUID | None = None,
     date_section: TaskDateSection | None = None,
-    status: int = Query(default=0, ge=0, le=2),
+    status: int | None = Query(default=None, ge=0, le=2),
     query: str | None = None,
     sort: TaskSort = "manual",
     limit: int = Query(default=100, ge=1, le=200),
@@ -57,9 +57,13 @@ async def get_tasks(
             "INVALID_TASK_SCOPE",
             "view、list_id 和 smart_list_id 必须且只能提供一个",
         )
-    if list_id is None and smart_list_id is None and status != 0:
-        raise ApiError(422, "INVALID_TASK_STATUS", "status 仅在使用 list_id 时有效")
-    if list_id is not None and status not in (0, 2):
+    if list_id is None and smart_list_id is None and status not in (None, 0):
+        raise ApiError(
+            422,
+            "INVALID_TASK_STATUS",
+            "status 仅在使用 list_id 或 smart_list_id 时有效",
+        )
+    if list_id is not None and status not in (None, 0, 2):
         raise ApiError(422, "INVALID_TASK_STATUS", "status 仅允许 0 或 2")
     if date_section is not None and view != "today":
         raise ApiError(422, "INVALID_DATE_SECTION", "date_section 仅适用于今天视图")
@@ -80,7 +84,11 @@ async def get_tasks(
     include_smart_completed = bool(
         smart_list and "completed" in smart_list.filters.get("statuses", [])
     )
-    if view == "completed" or (list_id is not None and status == 2) or include_smart_completed:
+    if (
+        view == "completed"
+        or (list_id is not None and status == 2)
+        or (include_smart_completed and status in (None, 2))
+    ):
         occurrence_query = (
             select(TaskOccurrence)
             .join(Task)

@@ -289,6 +289,44 @@ describe("AI 清单 app", () => {
     expect(screen.getByRole("navigation", { name: "任务导航" })).toBeInTheDocument();
   });
 
+  it("groups completed smart-list tasks after active tasks", async () => {
+    const smartListId = "00000000-0000-4000-8000-000000000401";
+    const requestedStatuses: string[] = [];
+    server.use(
+      http.get("http://127.0.0.1:8000/api/v1/smart-lists", () => HttpResponse.json([{
+        id: smartListId,
+        name: "全部状态",
+        color: "#6C5CE7",
+        sort_order: 1024,
+        source_list_ids: ["00000000-0000-4000-8000-000000000010"],
+        filters: { statuses: ["active", "completed"], priorities: [], tag_ids: [], date: null },
+        task_count: 2,
+        created_at: "2026-06-11T08:00:00Z",
+        updated_at: "2026-06-11T08:00:00Z",
+      }])),
+      http.get("http://127.0.0.1:8000/api/v1/tasks", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("smart_list_id") !== smartListId) return;
+        const status = url.searchParams.get("status") || "";
+        requestedStatuses.push(status);
+        const item = status === "2"
+          ? makeTask({ id: "smart-completed", title: "智能已完成", status: 2,
+            completed_at: "2026-06-11T08:00:00Z" })
+          : makeTask({ id: "smart-active", title: "智能未完成" });
+        return HttpResponse.json({ items: [item], next_cursor: null });
+      }),
+    );
+    const { container } = renderApp(`/smart-list/${smartListId}`);
+
+    const activeTitle = await screen.findByText("智能未完成");
+    const completedTitle = await screen.findByText("智能已完成");
+    expect(screen.getByRole("button", { name: "收起已完成区段" })).toBeInTheDocument();
+    expect(activeTitle.compareDocumentPosition(completedTitle)
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector(".task-section")?.textContent).toContain("智能已完成");
+    expect(requestedStatuses).toEqual(expect.arrayContaining(["0", "2"]));
+  });
+
   it("shows overdue tasks below today's tasks in the today view", async () => {
     const user = userEvent.setup();
     const today = new Date();

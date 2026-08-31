@@ -111,6 +111,68 @@ async def test_smart_list_validation_and_task_scope(client):
 
 
 @pytest.mark.asyncio
+async def test_smart_list_tasks_can_be_paged_by_status(client):
+    task_list = (
+        await client.post("/api/v1/lists", json={"name": "状态来源", "color": "#336699"})
+    ).json()
+    active = (
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "未完成任务", "list_id": task_list["id"]},
+        )
+    ).json()
+    completed = (
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "已完成任务", "list_id": task_list["id"]},
+        )
+    ).json()
+    await client.post(f"/api/v1/tasks/{completed['id']}/complete")
+    smart_list = (
+        await client.post(
+            "/api/v1/smart-lists",
+            json={
+                "name": "全部状态",
+                "source_list_ids": [task_list["id"]],
+                "filters": {"statuses": ["active", "completed"]},
+            },
+        )
+    ).json()
+
+    active_page = await client.get(
+        "/api/v1/tasks",
+        params={"smart_list_id": smart_list["id"], "status": 0},
+    )
+    completed_page = await client.get(
+        "/api/v1/tasks",
+        params={"smart_list_id": smart_list["id"], "status": 2},
+    )
+    combined_page = await client.get(
+        "/api/v1/tasks",
+        params={"smart_list_id": smart_list["id"]},
+    )
+
+    assert [item["id"] for item in active_page.json()["items"]] == [active["id"]]
+    assert [item["id"] for item in completed_page.json()["items"]] == [completed["id"]]
+    assert {item["id"] for item in combined_page.json()["items"]} == {
+        active["id"],
+        completed["id"],
+    }
+
+    active_only = (
+        await client.post(
+            "/api/v1/smart-lists",
+            json={"name": "仅未完成", "source_list_ids": [task_list["id"]]},
+        )
+    ).json()
+    unavailable = await client.get(
+        "/api/v1/tasks",
+        params={"smart_list_id": active_only["id"], "status": 2},
+    )
+    assert unavailable.json()["items"] == []
+
+
+@pytest.mark.asyncio
 async def test_authentication_is_required_and_login_returns_current_user(client):
     authorization = client.headers.pop("Authorization")
     unauthorized = await client.get("/api/v1/lists")

@@ -155,6 +155,17 @@ export function useTaskWorkspace() {
     enabled: showArchived,
   });
   const tags = useQuery({ queryKey: queryKeys.tags, queryFn: api.tags });
+  const currentList = lists.data?.find((item) => item.id === scope.listId);
+  const currentSmartList = smartLists.data?.find((item) => item.id === scope.smartListId);
+  const smartStatuses = currentSmartList?.filters.statuses || [];
+  const smartIncludesActive = smartStatuses.includes("active");
+  const smartIncludesCompleted = smartStatuses.includes("completed");
+  const hasSeparateCompletedTasks = Boolean(
+    scope.smartListId && smartIncludesActive && smartIncludesCompleted,
+  );
+  const smartPrimaryStatus = scope.smartListId
+    ? smartIncludesActive ? 0 : 2
+    : undefined;
   const listScopeId = useMemo(() => {
     if (scope.listId) return scope.listId;
     if (scope.view === "inbox") {
@@ -163,20 +174,21 @@ export function useTaskWorkspace() {
     return undefined;
   }, [scope.listId, scope.view, lists.data]);
   const tasks = useInfiniteQuery({
-    queryKey: queryKeys.tasks(scopeKey, debouncedSearch, sort),
+    queryKey: queryKeys.tasks(scopeKey, debouncedSearch, sort, smartPrimaryStatus),
     queryFn: ({ pageParam }) =>
       api.tasks({
         view: scope.view,
         dateSection: scope.view === "today" ? "today" : undefined,
         listId: scope.listId,
         smartListId: scope.smartListId,
+        status: smartPrimaryStatus,
         query: debouncedSearch,
         sort,
         cursor: pageParam || undefined,
       }),
     initialPageParam: "",
     getNextPageParam: (page) => page.next_cursor || undefined,
-    enabled: health.isSuccess,
+    enabled: health.isSuccess && (!scope.smartListId || currentSmartList !== undefined),
   });
   const overdueTasksQuery = useInfiniteQuery({
     queryKey: queryKeys.tasks(`${scopeKey}:overdue`, debouncedSearch, sort),
@@ -192,34 +204,41 @@ export function useTaskWorkspace() {
     enabled: health.isSuccess && scope.view === "today",
   });
   const completedTasksQuery = useInfiniteQuery({
-    queryKey: queryKeys.tasks(scopeKey, debouncedSearch, "created_desc", 2),
+    queryKey: queryKeys.tasks(
+      scopeKey,
+      debouncedSearch,
+      hasSeparateCompletedTasks ? sort : "created_desc",
+      2,
+    ),
     queryFn: ({ pageParam }) =>
       api.tasks({
         listId: listScopeId,
+        smartListId: hasSeparateCompletedTasks ? scope.smartListId : undefined,
         status: 2,
         query: debouncedSearch,
-        sort: "created_desc",
+        sort: hasSeparateCompletedTasks ? sort : "created_desc",
         cursor: pageParam || undefined,
       }),
     initialPageParam: "",
     getNextPageParam: (page) => page.next_cursor || undefined,
-    enabled: health.isSuccess && !!listScopeId,
+    enabled: health.isSuccess && (!!listScopeId || hasSeparateCompletedTasks),
   });
 
   const taskItems = useMemo(
-    () => tasks.data?.pages.flatMap((page) => page.items) || [],
-    [tasks.data],
+    () => (tasks.data?.pages.flatMap((page) => page.items) || []).filter(
+      (task) => smartPrimaryStatus === undefined || task.status === smartPrimaryStatus,
+    ),
+    [smartPrimaryStatus, tasks.data],
   );
   const completedTaskItems = useMemo(
-    () => completedTasksQuery.data?.pages.flatMap((page) => page.items) || [],
+    () => (completedTasksQuery.data?.pages.flatMap((page) => page.items) || [])
+      .filter((task) => task.status === 2),
     [completedTasksQuery.data],
   );
   const overdueTaskItems = useMemo(
     () => overdueTasksQuery.data?.pages.flatMap((page) => page.items) || [],
     [overdueTasksQuery.data],
   );
-  const currentList = lists.data?.find((item) => item.id === scope.listId);
-  const currentSmartList = smartLists.data?.find((item) => item.id === scope.smartListId);
 
   const refreshWorkspaceData = useCallback(async () => {
     if (refreshingRef.current) return;
@@ -514,6 +533,7 @@ export function useTaskWorkspace() {
     overdueTaskItems,
     completedTasksQuery,
     completedTaskItems,
+    hasSeparateCompletedTasks,
     listScopeId,
     currentList,
     currentSmartList,

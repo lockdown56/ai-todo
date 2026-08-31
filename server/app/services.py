@@ -140,7 +140,7 @@ async def require_smart_list(session: AsyncSession, smart_list_id: UUID):
     return smart_list
 
 
-def apply_smart_list_filters(query, smart_list: SmartList):
+def apply_smart_list_filters(query, smart_list: SmartList, status: int | None = None):
     source_ids = [source.list_id for source in smart_list.sources]
     filters = smart_list.filters
     statuses = [0 if value == "active" else 2 for value in filters.get("statuses", ["active"])]
@@ -151,6 +151,10 @@ def apply_smart_list_filters(query, smart_list: SmartList):
         TaskList.archived_at.is_(None),
         TaskList.deleted_at.is_(None),
     )
+    if status is not None:
+        if status not in statuses:
+            return query.where(False)
+        query = query.where(Task.status == status)
     priorities = filters.get("priorities", [])
     if priorities:
         query = query.where(Task.priority.in_(priorities))
@@ -359,7 +363,7 @@ async def list_tasks(
     list_id: UUID | None,
     smart_list_id: UUID | None = None,
     date_section: TaskDateSection | None = None,
-    status: int = 0,
+    status: int | None = None,
     query_text: str | None,
     sort: TaskSort,
     limit: int,
@@ -374,13 +378,13 @@ async def list_tasks(
 
     if smart_list_id:
         smart_list = await require_smart_list(session, smart_list_id)
-        query = apply_smart_list_filters(query, smart_list)
+        query = apply_smart_list_filters(query, smart_list, status)
     elif list_id:
         await require_list(session, list_id)
         query = query.where(
             Task.list_id == list_id,
             Task.deleted_at.is_(None),
-            Task.status == status,
+            Task.status == (status if status is not None else 0),
         )
     elif view == "trash":
         query = query.where(Task.deleted_at.is_not(None))
@@ -434,7 +438,7 @@ async def list_tasks(
             )
         ]
     recurring_ids = [task.id for task in tasks if task.recurrence_type]
-    if recurring_ids and status == 0:
+    if recurring_ids and status in (None, 0):
         completed_ids = set(
             await session.scalars(
                 select(TaskOccurrence.task_id).where(

@@ -63,6 +63,7 @@ export function DesktopShell() {
     overdueTaskItems,
     completedTasksQuery,
     completedTaskItems,
+    hasSeparateCompletedTasks,
     listScopeId,
     currentList,
     currentSmartList,
@@ -318,7 +319,8 @@ export function DesktopShell() {
             <>
               <TaskHeader
                 title={currentTitle}
-                count={taskItems.length + overdueTaskItems.length}
+                count={taskItems.length + overdueTaskItems.length
+                  + (hasSeparateCompletedTasks ? completedTaskItems.length : 0)}
                 search={search}
                 sort={sort}
                 quickAddRef={quickAddRef}
@@ -359,7 +361,8 @@ export function DesktopShell() {
               <TaskListPanel
                 tasks={taskItems}
                 overdueTasks={scope.view === "today" ? overdueTaskItems : undefined}
-                completedTasks={listScopeId ? completedTaskItems : undefined}
+                completedTasks={listScopeId || hasSeparateCompletedTasks
+                  ? completedTaskItems : undefined}
                 scopeKey={scopeKey}
                 activeTaskId={selectedTaskId}
                 view={scope.view}
@@ -367,21 +370,25 @@ export function DesktopShell() {
                 showSourceLists={Boolean(scope.smartListId)}
                 loading={tasks.isPending}
                 overdueLoading={scope.view === "today" ? overdueTasksQuery.isPending : undefined}
-                completedLoading={listScopeId ? completedTasksQuery.isPending : undefined}
+                completedLoading={listScopeId || hasSeparateCompletedTasks
+                  ? completedTasksQuery.isPending : undefined}
                 error={tasks.error}
                 hasNext={tasks.hasNextPage}
                 overdueHasNext={scope.view === "today" ? overdueTasksQuery.hasNextPage : undefined}
-                completedHasNext={listScopeId ? completedTasksQuery.hasNextPage : undefined}
+                completedHasNext={listScopeId || hasSeparateCompletedTasks
+                  ? completedTasksQuery.hasNextPage : undefined}
                 fetchingNext={tasks.isFetchingNextPage}
                 overdueFetchingNext={scope.view === "today" ? overdueTasksQuery.isFetchingNextPage : undefined}
                 completedFetchingNext={
-                  listScopeId ? completedTasksQuery.isFetchingNextPage : undefined
+                  listScopeId || hasSeparateCompletedTasks
+                    ? completedTasksQuery.isFetchingNextPage : undefined
                 }
                 onLoadMore={() => void tasks.fetchNextPage()}
                 onLoadMoreOverdue={scope.view === "today"
                   ? () => void overdueTasksQuery.fetchNextPage() : undefined}
                 onLoadMoreCompleted={
-                  listScopeId ? () => void completedTasksQuery.fetchNextPage() : undefined
+                  listScopeId || hasSeparateCompletedTasks
+                    ? () => void completedTasksQuery.fetchNextPage() : undefined
                 }
                 onSelect={openTask}
                 onRename={renameTask}
