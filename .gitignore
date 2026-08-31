@@ -8,6 +8,7 @@ __pycache__/
 server/.venv/
 desktop/node_modules/
 desktop/dist/
+desktop/release/
 desktop/*.tsbuildinfo
 desktop/vite.config.js
 desktop/vite.config.d.ts

@@ -8,13 +8,14 @@
     "build": "tsc -b && vite build",
     "test": "vitest --config vitest.config.ts",
     "tauri": "tauri",
+    "desktop:release": "tauri build && node scripts/collect-artifacts.mjs desktop",
     "icons:generate": "tauri icon src-tauri/app-icon-manifest.json",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
     "android:apk": "tauri android build --apk",
-    "android:aab": "tauri android build --aab",
+    "android:aab": "tauri android build --aab && node scripts/collect-artifacts.mjs aab",
     "android:sign": "node scripts/sign-android-apk.mjs",
-    "android:release": "npm run android:apk && npm run android:sign"
+    "android:release": "npm run android:apk && npm run android:sign && node scripts/collect-artifacts.mjs apk"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",

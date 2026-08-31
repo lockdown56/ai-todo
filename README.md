@@ -99,8 +99,18 @@ JSON 输入及输出契约见 [`docs/cli-usage.md`](docs/cli-usage.md)。
 Windows 打包：
 
 ```bash
-npm --prefix desktop run tauri build
+npm --prefix desktop run desktop:release
 ```
+
+Android 打包：
+
+```bash
+npm --prefix desktop run android:release  # 已签名 APK
+npm --prefix desktop run android:aab      # AAB
+```
+
+最终安装包统一输出到 `desktop/release/`，文件名包含应用版本、平台和架构。Tauri、
+Cargo 与 Gradle 的原始构建目录仍保留用于增量构建。
 
 安装包只包含桌面客户端，不包含 FastAPI、PostgreSQL 或 Docker。运行安装后的应用前，
 目标 Windows 机器仍需启动 API，并确保 `http://127.0.0.1:8000/health` 可访问。
