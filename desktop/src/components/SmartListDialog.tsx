@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronDown, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { errorMessage } from "@/lib/error-utils";
 import { priorityLabels, tagColors } from "@/lib/constants";
+import { sortGroupsByOrder, sortListsByOrder } from "@/lib/list-reorder";
 import type {
-  SmartList, SmartListDateMode, SmartListFilters, SmartListInput, Tag, TaskList,
+  ListGroup, SmartList, SmartListDateMode, SmartListFilters, SmartListInput, Tag, TaskList,
 } from "@/types";
 
 const dateOptions: Array<[SmartListDateMode | "", string]> = [
@@ -19,9 +20,10 @@ const dateOptions: Array<[SmartListDateMode | "", string]> = [
   ["range", "自定义范围"],
 ];
 
-export function SmartListDialog({ smartList, lists, tags, onClose, onSubmit }: {
+export function SmartListDialog({ smartList, lists, groups, tags, onClose, onSubmit }: {
   smartList?: SmartList;
   lists: TaskList[];
+  groups: ListGroup[];
   tags: Tag[];
   onClose: () => void;
   onSubmit: (values: SmartListInput) => Promise<void>;
@@ -34,9 +36,28 @@ export function SmartListDialog({ smartList, lists, tags, onClose, onSubmit }: {
   });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
+
+  const sourceGroups = useMemo(() => {
+    const grouped = sortGroupsByOrder(groups).map((group) => ({
+      id: group.id,
+      name: group.name,
+      lists: sortListsByOrder(lists.filter((list) => list.group_id === group.id)),
+    })).filter((group) => group.lists.length > 0);
+    const ungrouped = sortListsByOrder(lists.filter((list) => list.group_id === null));
+    return ungrouped.length > 0
+      ? [...grouped, { id: "ungrouped", name: "未分组", lists: ungrouped }]
+      : grouped;
+  }, [groups, lists]);
 
   const toggle = <T,>(values: T[], value: T) =>
     values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+  const toggleGroup = (listIds: string[]) => {
+    const selected = new Set(sources);
+    const allSelected = listIds.every((id) => selected.has(id));
+    listIds.forEach((id) => allSelected ? selected.delete(id) : selected.add(id));
+    setSources([...selected]);
+  };
   const submit = async () => {
     if (!name.trim() || sources.length === 0 || filters.statuses.length === 0) return;
     if (filters.date?.mode === "range" && (!filters.date.start || !filters.date.end)) return;
@@ -70,12 +91,38 @@ export function SmartListDialog({ smartList, lists, tags, onClose, onSubmit }: {
               style={{ backgroundColor: option }} onClick={() => setColor(option)}
               aria-label={`选择颜色 ${option}`} aria-pressed={color === option} />)}
           </div></div>
-          <fieldset className="smart-filter-group"><legend>来源清单</legend>
-            {lists.map((list) => <label key={list.id} className="smart-filter-option">
-              <Checkbox checked={sources.includes(list.id)}
-                onCheckedChange={() => setSources(toggle(sources, list.id))} />
-              <span className="list-dot" style={{ backgroundColor: list.color }} />{list.name}
-            </label>)}
+          <fieldset className="smart-filter-group smart-source-picker"><legend>来源清单</legend>
+            {sourceGroups.map((group) => {
+              const listIds = group.lists.map((list) => list.id);
+              const selectedCount = listIds.filter((id) => sources.includes(id)).length;
+              const checked = selectedCount === listIds.length
+                ? true
+                : selectedCount > 0 ? "indeterminate" as const : false;
+              const collapsed = collapsedGroups.includes(group.id);
+              return <div className="smart-source-group" key={group.id}>
+                <div className="smart-source-group-header">
+                  <label className="smart-source-group-select">
+                    <Checkbox checked={checked} aria-label={`选择分组 ${group.name}`}
+                      onCheckedChange={() => toggleGroup(listIds)} />
+                    <span>{group.name}</span>
+                    <span className="smart-source-count">{selectedCount} / {listIds.length}</span>
+                  </label>
+                  <button type="button" className="smart-source-collapse"
+                    aria-label={`${collapsed ? "展开" : "折叠"}分组 ${group.name}`}
+                    aria-expanded={!collapsed}
+                    onClick={() => setCollapsedGroups(toggle(collapsedGroups, group.id))}>
+                    <ChevronDown className={collapsed ? "collapsed" : ""} />
+                  </button>
+                </div>
+                {!collapsed && <div className="smart-source-lists">
+                  {group.lists.map((list) => <label key={list.id} className="smart-filter-option">
+                    <Checkbox checked={sources.includes(list.id)} aria-label={`选择清单 ${list.name}`}
+                      onCheckedChange={() => setSources(toggle(sources, list.id))} />
+                    <span className="list-dot" style={{ backgroundColor: list.color }} />{list.name}
+                  </label>)}
+                </div>}
+              </div>;
+            })}
           </fieldset>
           <fieldset className="smart-filter-group"><legend>任务状态</legend>
             {(["active", "completed"] as const).map((status) =>

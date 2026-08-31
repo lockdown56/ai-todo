@@ -483,6 +483,7 @@ export function DesktopShell() {
           key={smartListDialog?.id || "new"}
           smartList={smartListDialog || undefined}
           lists={lists.data || []}
+          groups={listGroups.data || []}
           tags={tags.data || []}
           onClose={() => setSmartListDialog(undefined)}
           onSubmit={async (values) => {

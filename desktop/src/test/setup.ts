@@ -22,6 +22,17 @@ Object.defineProperties(Element.prototype, {
   },
 });
 
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+Object.defineProperty(globalThis, "ResizeObserver", {
+  configurable: true,
+  value: ResizeObserverMock,
+});
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => {
   resetMockData();

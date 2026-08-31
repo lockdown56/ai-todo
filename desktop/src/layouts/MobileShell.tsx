@@ -442,6 +442,7 @@ export function MobileShell() {
       {smartListDialog !== undefined && <SmartListDialog
         smartList={smartListDialog || undefined}
         lists={lists.data || []}
+        groups={listGroups.data || []}
         tags={tags.data || []}
         onClose={() => setSmartListDialog(undefined)}
         onSubmit={async (values) => {

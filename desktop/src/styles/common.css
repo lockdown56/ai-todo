@@ -212,5 +212,16 @@
 .smart-filter-group { border: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 0; }
 .smart-filter-group legend { display: block; font-size: 14px; font-weight: 500; margin-bottom: 8px; width: 100%; }
 .smart-filter-option { align-items: center; display: inline-flex; font-size: 14px; gap: 7px; min-height: 28px; }
+.smart-source-picker { display: block; }
+.smart-source-group { border: 1px solid var(--border); border-radius: 8px; margin-top: 8px; overflow: hidden; }
+.smart-source-group-header { align-items: center; background: color-mix(in srgb, var(--muted) 55%, transparent); display: flex; min-height: 40px; padding: 0 8px 0 10px; }
+.smart-source-group-select { align-items: center; display: flex; flex: 1; font-size: 14px; font-weight: 500; gap: 8px; min-width: 0; }
+.smart-source-count { color: var(--muted-foreground); font-size: 12px; font-weight: 400; margin-left: auto; white-space: nowrap; }
+.smart-source-collapse { align-items: center; border-radius: 5px; color: var(--muted-foreground); display: inline-flex; height: 30px; justify-content: center; margin-left: 6px; width: 30px; }
+.smart-source-collapse:hover { background: var(--accent); color: var(--foreground); }
+.smart-source-collapse svg { height: 16px; transition: transform 150ms ease; width: 16px; }
+.smart-source-collapse svg.collapsed { transform: rotate(-90deg); }
+.smart-source-lists { display: grid; gap: 4px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px 12px 10px 34px; }
+@media (max-width: 560px) { .smart-source-lists { grid-template-columns: 1fr; } }
 .smart-filter-select { background: var(--background); border: 1px solid var(--border); border-radius: 6px; min-height: 36px; padding: 0 10px; }
 .smart-date-range { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
