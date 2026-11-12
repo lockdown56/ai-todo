@@ -18,6 +18,7 @@ import type {
 } from "@/types";
 import { useDebouncedValue, useWindowWidth } from "@/lib/hooks";
 import {
+  invalidateSmartListTasks,
   invalidateTaskData,
   updateTaskListCache,
   insertTaskAfter,
@@ -386,6 +387,7 @@ export function useTaskWorkspace() {
       updateTaskListCache(queryClient, task.id, { title: saved.title });
       queryClient.setQueryData(queryKeys.task(task.id), saved);
       void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
+      void invalidateSmartListTasks(queryClient);
       return saved;
     },
     [queryClient],
@@ -398,17 +400,20 @@ export function useTaskWorkspace() {
         list_id: afterTask.list_id,
         sort_order: sortOrder,
       });
-      insertTaskAfter(
-        queryClient,
-        queryKeys.tasks(scopeKey, debouncedSearch, sort),
-        task,
-        afterTask.id,
-      );
+      if (!scope.smartListId) {
+        insertTaskAfter(
+          queryClient,
+          queryKeys.tasks(scopeKey, debouncedSearch, sort),
+          task,
+          afterTask.id,
+        );
+      }
       queryClient.setQueryData(queryKeys.task(task.id), task);
       void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
+      await invalidateSmartListTasks(queryClient);
       return task;
     },
-    [debouncedSearch, queryClient, scopeKey, sort],
+    [debouncedSearch, queryClient, scope.smartListId, scopeKey, sort],
   );
 
   const deleteInlineTask = useCallback(
@@ -417,6 +422,7 @@ export function useTaskWorkspace() {
       removeTaskFromCache(queryClient, task.id);
       queryClient.removeQueries({ queryKey: queryKeys.task(task.id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.lists });
+      void invalidateSmartListTasks(queryClient);
     },
     [queryClient],
   );

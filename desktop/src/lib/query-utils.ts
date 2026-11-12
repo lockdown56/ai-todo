@@ -8,6 +8,15 @@ export function invalidateTaskData(queryClient: ReturnType<typeof useQueryClient
   if (taskId) void queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) });
 }
 
+export function invalidateSmartListTasks(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.smartLists });
+  return queryClient.invalidateQueries({
+    queryKey: ["tasks"],
+    predicate: ({ queryKey }) =>
+      typeof queryKey[1] === "string" && queryKey[1].startsWith("smart-list:"),
+  });
+}
+
 export function updateTaskListCache(
   queryClient: ReturnType<typeof useQueryClient>,
   taskId: string,

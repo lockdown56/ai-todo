@@ -32,7 +32,7 @@ import {
 import { api } from "@/api";
 import { queryKeys } from "@/query";
 import { errorMessage } from "@/lib/error-utils";
-import { updateTaskListCache } from "@/lib/query-utils";
+import { invalidateSmartListTasks, updateTaskListCache } from "@/lib/query-utils";
 import { priorityLabels, tagColors } from "@/lib/constants";
 import { DateTimePicker } from "./DateTimePicker";
 import type { ChecklistItem, Tag, Task, TaskList, TaskPatch } from "@/types";
@@ -174,6 +174,7 @@ export const TaskDetail = forwardRef<EditorHandle, {
           inFlightRef.current.size > 0 ? "saving" : hasPatchValues(pendingRef.current) ? "dirty" : "saved",
         );
       }
+      void invalidateSmartListTasks(queryClient);
       return true;
     } catch (error) {
       inFlightRef.current.delete(requestId);

@@ -422,10 +422,17 @@ async def list_tasks(
         pattern = f"%{cleaned}%"
         query = query.where(or_(Task.title.ilike(pattern), Task.description.ilike(pattern)))
 
-    query = task_sorting(query, sort, cursor).limit(limit + 1)
-    tasks = list((await session.scalars(query)).unique().all())
     timezone = ZoneInfo(get_settings().app_timezone)
     today = datetime.now(timezone).date()
+    if status in (None, 0):
+        completed_today = select(TaskOccurrence.task_id).where(
+            TaskOccurrence.task_id == Task.id,
+            TaskOccurrence.occurrence_date == today,
+        )
+        query = query.where(or_(Task.recurrence_type.is_(None), ~completed_today.exists()))
+
+    query = task_sorting(query, sort, cursor).limit(limit + 1)
+    tasks = list((await session.scalars(query)).unique().all())
     if view == "today" and date_section != "overdue":
         tasks = [
             task
@@ -437,17 +444,6 @@ async def list_tasks(
                 and task.due_at.astimezone(timezone).date() == today
             )
         ]
-    recurring_ids = [task.id for task in tasks if task.recurrence_type]
-    if recurring_ids and status in (None, 0):
-        completed_ids = set(
-            await session.scalars(
-                select(TaskOccurrence.task_id).where(
-                    TaskOccurrence.task_id.in_(recurring_ids),
-                    TaskOccurrence.occurrence_date == today,
-                )
-            )
-        )
-        tasks = [task for task in tasks if task.id not in completed_ids]
     has_more = len(tasks) > limit
     tasks = tasks[:limit]
     next_cursor = (

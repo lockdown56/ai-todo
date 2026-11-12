@@ -1,9 +1,11 @@
 import hashlib
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.models import RefreshToken
 
 
@@ -73,6 +75,50 @@ async def test_smart_list_crud_filters_and_source_lifecycle(client):
     deleted = await client.delete(f"/api/v1/smart-lists/{smart_list['id']}")
     assert deleted.status_code == 204
     assert (await client.get("/api/v1/smart-lists")).json() == []
+
+
+@pytest.mark.asyncio
+async def test_smart_list_paginates_only_pending_tasks(client):
+    source = (await client.post("/api/v1/lists", json={"name": "日常任务"})).json()
+    smart_list = (
+        await client.post(
+            "/api/v1/smart-lists",
+            json={"name": "工作任务", "source_list_ids": [source["id"]]},
+        )
+    ).json()
+    today = datetime.now(ZoneInfo(get_settings().app_timezone)).date().isoformat()
+    recurring = (
+        await client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "每日复盘",
+                "list_id": source["id"],
+                "sort_order": 1024,
+                "recurrence_type": "daily",
+                "recurrence_start_date": today,
+            },
+        )
+    ).json()
+    assert (await client.post(f"/api/v1/tasks/{recurring['id']}/complete")).status_code == 200
+
+    pending_ids = []
+    for sort_order in (2048, 3072):
+        response = await client.post(
+            "/api/v1/tasks",
+            json={"title": "未开始", "list_id": source["id"], "sort_order": sort_order},
+        )
+        assert response.status_code == 201
+        pending_ids.append(response.json()["id"])
+
+    params = {"smart_list_id": smart_list["id"], "status": 0, "limit": 1}
+    first_page = (await client.get("/api/v1/tasks", params=params)).json()
+    assert [item["id"] for item in first_page["items"]] == pending_ids[:1]
+    assert first_page["next_cursor"]
+    last_page = (
+        await client.get("/api/v1/tasks", params={**params, "cursor": first_page["next_cursor"]})
+    ).json()
+    assert [item["id"] for item in last_page["items"]] == pending_ids[1:]
+    assert last_page["next_cursor"] is None
 
 
 @pytest.mark.asyncio
