@@ -12,6 +12,7 @@ import {
   CalendarClock,
   ChevronDown,
   Flag,
+  List,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { shouldIgnoreAppShortcut, isCtrlShortcut, isImeComposing } from "@/lib/keyboard-utils";
 import { priorityLabels, priorityShortcutValues } from "@/lib/constants";
 import { dueAtForShortcut, formatDue } from "@/lib/date-utils";
-import type { CreateTaskInput, Task, TaskSort } from "@/types";
+import type { CreateTaskInput, Task, TaskList, TaskSort } from "@/types";
 
 export function TaskHeader({
   title,
@@ -57,7 +58,7 @@ export function TaskHeader({
   onSort: (sort: TaskSort) => void;
   onCreate: (payload: CreateTaskInput) => void;
   onRefresh?: () => void | Promise<void>;
-  sourceLists?: Array<{ id: string; name: string }>;
+  sourceLists?: Array<Pick<TaskList, "id" | "name" | "color">>;
 }) {
   const [titleInput, setTitleInput] = useState("");
   const [quickPriority, setQuickPriority] = useState<0 | 1 | 3 | 5>(0);
@@ -67,6 +68,9 @@ export function TaskHeader({
   const [refreshSpin, setRefreshSpin] = useState(false);
   const refreshSpinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const quickListTriggerRef = useRef<HTMLButtonElement>(null);
+  const quickListPicked = useRef(false);
+  const quickList = sourceLists?.find((list) => list.id === quickListId);
   const sortOptions: [TaskSort, string][] = [
     ["manual", "手动"],
     ["created_desc", "最新"],
@@ -189,11 +193,15 @@ export function TaskHeader({
             onSubmit={(event) => {
               event.preventDefault();
               const cleaned = titleInput.trim();
-              if (!cleaned || (sourceLists && !quickListId)) return;
+              if (!cleaned) return;
+              if (sourceLists && !quickList) {
+                quickListTriggerRef.current?.focus();
+                return;
+              }
               onCreate({
                 title: cleaned,
                 priority: quickPriority,
-                ...(quickListId ? { list_id: quickListId } : {}),
+                ...(quickList ? { list_id: quickList.id } : {}),
                 ...(quickDueAt ? { due_at: quickDueAt, is_all_day: true } : {}),
               });
               setTitleInput("");
@@ -204,7 +212,7 @@ export function TaskHeader({
             {createPending ? <LoaderCircle className="spin" /> : <Plus />}
             <Input
               ref={quickAddRef}
-              className="border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
+              className="min-w-0 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
               value={titleInput}
               onChange={(event) => setTitleInput(event.target.value)}
               onKeyDown={(event) => {
@@ -250,11 +258,51 @@ export function TaskHeader({
                 <X />
               </button>
             )}
-            {sourceLists && <select className="smart-filter-select" value={quickListId}
-              aria-label="选择任务所属清单" onChange={(event) => setQuickListId(event.target.value)}>
-              <option value="">选择清单</option>
-              {sourceLists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}
-            </select>}
+            {sourceLists && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    ref={quickListTriggerRef}
+                    type="button"
+                    className="quick-add-list-trigger"
+                    aria-label={quickList ? `任务所属清单：${quickList.name}` : "选择任务所属清单"}
+                    disabled={sourceLists.length === 0}
+                  >
+                    {quickList
+                      ? <span className="list-dot" style={{ backgroundColor: quickList.color }} />
+                      : <List />}
+                    <span className="truncate">{quickList?.name ?? "选择清单"}</span>
+                    <ChevronDown />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="quick-add-list-menu"
+                  aria-label="任务所属清单"
+                  onCloseAutoFocus={(event) => {
+                    if (!quickListPicked.current) return;
+                    quickListPicked.current = false;
+                    event.preventDefault();
+                    quickAddRef.current?.focus();
+                  }}
+                >
+                  <DropdownMenuRadioGroup value={quickList?.id ?? ""} onValueChange={setQuickListId}>
+                    {sourceLists.map((list) => (
+                      <DropdownMenuRadioItem
+                        key={list.id}
+                        value={list.id}
+                        textValue={list.name}
+                        className="gap-2"
+                        onSelect={() => { quickListPicked.current = true; }}
+                      >
+                        <span className="list-dot" style={{ backgroundColor: list.color }} />
+                        <span className="truncate">{list.name}</span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </form>
           {createError && <div className="inline-error">{createError}</div>}
         </>

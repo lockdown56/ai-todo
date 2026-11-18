@@ -869,6 +869,51 @@ body.is-list-sorting .sortable-list-item {
   color: var(--primary);
 }
 
+.quick-add-list-trigger {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  max-width: min(45%, 11rem);
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.quick-add-list-trigger:hover:not(:disabled),
+.quick-add-list-trigger[data-state="open"] {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.quick-add-list-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.quick-add-list-trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.quick-add-list-trigger > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.quick-add-list-menu {
+  width: max(12rem, var(--radix-dropdown-menu-trigger-width));
+  max-width: var(--radix-dropdown-menu-content-available-width);
+  max-height: min(18rem, var(--radix-dropdown-menu-content-available-height));
+  overflow-y: auto;
+}
+
 .quick-add-chip {
   display: inline-flex;
   flex: 0 0 auto;
