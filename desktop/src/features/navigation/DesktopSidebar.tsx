@@ -18,6 +18,7 @@ import {
 import {
   Archive,
   ArchiveRestore,
+  Bot,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -397,6 +398,16 @@ export function DesktopSidebar({
             </Button>
           );
         })}
+        <Button
+          variant="ghost"
+          className={`nav-item ${currentPath === "/agent-board" ? "active" : ""}`}
+          onClick={() => void onNavigate("/agent-board")}
+          title="智能体看板"
+          aria-label={collapsed ? "智能体看板" : undefined}
+        >
+          <Bot />
+          {!collapsed && <span>智能体看板</span>}
+        </Button>
       </div>
       <div className="sidebar-divider" />
       {!collapsed && <div className="lists-heading"><span>智能清单</span>

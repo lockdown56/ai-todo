@@ -67,8 +67,14 @@ class ApiClient:
     def get(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
         return self._request("GET", path, params=params)
 
-    def post(self, path: str, *, json: dict[str, Any] | None = None) -> Any:
-        return self._request("POST", path, json=json)
+    def post(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        return self._request("POST", path, json=json, headers=headers)
 
     def patch(self, path: str, *, json: dict[str, Any] | None = None) -> Any:
         return self._request("PATCH", path, json=json)

@@ -1,8 +1,12 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import type { Tag, Task, TaskList } from "../types";
+import type { AgentRun, AgentRunLane, ApiKeyScope, Tag, Task, TaskList } from "../types";
 
 const now = "2026-06-11T08:00:00Z";
+
+function minutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
+}
 
 export const inbox: TaskList = {
   id: "00000000-0000-4000-8000-000000000010",
@@ -97,11 +101,88 @@ let nextTaskNumber = 203;
 let currentRefreshToken = "test-refresh-token";
 let nextRefreshNumber = 1;
 
+export function makeAgentRun(overrides: Partial<AgentRun> = {}): AgentRun {
+  return {
+    id: "00000000-0000-4000-8000-000000000500",
+    source: "Codex · 工作电脑",
+    title: "等待确认迁移方案",
+    summary: "请回原会话确认是否运行数据库迁移",
+    status: "waiting_user",
+    version: 3,
+    session_ref: "db-migration-review",
+    session_url: "https://chatgpt.com/c/example-session",
+    workspace_label: "ai-todo",
+    task_id: null,
+    created_at: now,
+    updated_at: minutesAgo(3),
+    status_changed_at: minutesAgo(3),
+    ...overrides,
+  };
+}
+
+function defaultAgentRuns(): AgentRun[] {
+  return [
+    makeAgentRun(),
+    makeAgentRun({
+      id: "00000000-0000-4000-8000-000000000501",
+      source: "Claude Code",
+      title: "排查支付回调异常",
+      summary: "已定位重复回调，正在补充回归用例",
+      status: "running",
+      version: 2,
+      session_ref: "pay-callback",
+      session_url: null,
+      workspace_label: "payment-service",
+      updated_at: minutesAgo(1),
+      status_changed_at: minutesAgo(20),
+    }),
+    makeAgentRun({
+      id: "00000000-0000-4000-8000-000000000502",
+      title: "回归验证完成",
+      summary: "全部用例通过",
+      status: "succeeded",
+      version: 5,
+      session_ref: null,
+      session_url: null,
+      updated_at: minutesAgo(10),
+      status_changed_at: minutesAgo(10),
+    }),
+  ];
+}
+
+let agentRuns = defaultAgentRuns();
+
+export const agentRunRequestLog: string[] = [];
+export const agentRunEventLog: Array<{
+  runId: string;
+  body: unknown;
+  idempotencyKey: string | null;
+}> = [];
+
+const laneStatuses: Record<AgentRunLane, string[]> = {
+  attention: ["waiting_user"],
+  active: ["running"],
+  history: ["succeeded", "failed", "cancelled", "dismissed"],
+};
+
+export function listAgentRuns(search: URLSearchParams) {
+  const lane = (search.get("lane") || "attention") as AgentRunLane;
+  const source = (search.get("source") || "").trim();
+  const items = agentRuns.filter(
+    (run) =>
+      laneStatuses[lane].includes(run.status) && (!source || run.source === source),
+  );
+  return { items, next_cursor: null as string | null };
+}
+
 export function resetMockData() {
   tasks = [makeTask(), inboxCompletedTask, workListTask, workListCompletedTask];
   nextTaskNumber = 203;
   currentRefreshToken = "test-refresh-token";
   nextRefreshNumber = 1;
+  agentRuns = defaultAgentRuns();
+  agentRunRequestLog.length = 0;
+  agentRunEventLog.length = 0;
 }
 
 export const handlers = [
@@ -291,12 +372,13 @@ export const handlers = [
     HttpResponse.json([]),
   ),
   http.post("http://127.0.0.1:8000/api/v1/api-keys", async ({ request }) => {
-    const body = (await request.json()) as { name: string };
+    const body = (await request.json()) as { name: string; scope?: ApiKeyScope };
     return HttpResponse.json(
       {
         id: "00000000-0000-4000-8000-000000000030",
         name: body.name,
         key_prefix: "tdl_testpre01",
+        scope: body.scope || "todo_full",
         last_used_at: null,
         expires_at: null,
         created_at: now,
@@ -307,6 +389,56 @@ export const handlers = [
   }),
   http.delete("http://127.0.0.1:8000/api/v1/api-keys/:keyId", () =>
     new HttpResponse(null, { status: 204 }),
+  ),
+  http.get("http://127.0.0.1:8000/api/v1/agent-runs", ({ request }) => {
+    const url = new URL(request.url);
+    agentRunRequestLog.push(url.search);
+    return HttpResponse.json(listAgentRuns(url.searchParams));
+  }),
+  http.post(
+    "http://127.0.0.1:8000/api/v1/agent-runs/:runId/events",
+    async ({ request, params }) => {
+      const body = (await request.json()) as {
+        type: string;
+        expected_version: number;
+      };
+      agentRunEventLog.push({
+        runId: String(params.runId),
+        body,
+        idempotencyKey: request.headers.get("Idempotency-Key"),
+      });
+      const run = agentRuns.find((item) => item.id === params.runId);
+      if (!run) {
+        return HttpResponse.json(
+          {
+            error: {
+              code: "AGENT_RUN_NOT_FOUND",
+              message: "运行不存在",
+              fields: null,
+            },
+          },
+          { status: 404 },
+        );
+      }
+      if (body.expected_version !== run.version) {
+        return HttpResponse.json(
+          {
+            error: {
+              code: "AGENT_VERSION_CONFLICT",
+              message: "版本已过期，请刷新后重试",
+              fields: null,
+            },
+          },
+          { status: 409 },
+        );
+      }
+      if (body.type === "dismiss") {
+        run.status = "dismissed";
+        run.status_changed_at = new Date().toISOString();
+        run.version += 1;
+      }
+      return HttpResponse.json({ run_id: run.id, version: run.version });
+    },
   ),
 ];
 

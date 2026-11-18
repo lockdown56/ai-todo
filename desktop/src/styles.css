@@ -13,6 +13,10 @@
     grid-template-columns: var(--sidebar-collapsed) minmax(420px, 1fr) var(--detail-width);
   }
 
+  .app-shell.compact-sidebar.agent-board-mode {
+    grid-template-columns: var(--sidebar-collapsed) minmax(0, 1fr);
+  }
+
   .compact-sidebar.sidebar-overlay-open .sidebar {
     position: fixed;
     inset: 0 auto 0 0;

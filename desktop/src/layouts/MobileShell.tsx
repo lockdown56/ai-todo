@@ -18,11 +18,13 @@ import {
   RefreshCw,
   Pencil,
   Sparkles,
+  Bot,
 } from "lucide-react";
 import { useTaskWorkspace } from "@/features/tasks/useTaskWorkspace";
 import { TaskHeader } from "@/features/tasks/TaskHeader";
 import { TaskListPanel } from "@/features/tasks/TaskListPanel";
 import { TaskDetail } from "@/features/tasks/TaskDetail";
+import { AgentBoardPage } from "@/features/agent-board/AgentBoardPage";
 import { MobileTaskComposer } from "@/features/tasks/MobileTaskComposer";
 import { ProfilePage } from "@/features/account/ProfilePage";
 import { SettingsPage } from "@/features/account/SettingsPage";
@@ -71,6 +73,7 @@ export function MobileShell() {
     isRefreshing,
     isProfileRoute,
     isSettingsRoute,
+    isAgentBoardRoute,
 
     health,
     lists,
@@ -252,6 +255,8 @@ export function MobileShell() {
         >
           {isProfileRoute ? <ProfilePage /> : <SettingsPage />}
         </MobileSubPage>
+      ) : isAgentBoardRoute ? (
+        <AgentBoardPage />
       ) : (
         <>
           <TaskHeader
@@ -393,7 +398,7 @@ export function MobileShell() {
         ))}
       </nav>
 
-      {!isProfileRoute && !isSettingsRoute && (
+      {!isProfileRoute && !isSettingsRoute && !isAgentBoardRoute && (
         <Button
           type="button"
           size="icon"
@@ -651,6 +656,17 @@ function MobileMoreDrawer({
               })}
             </>
           )}
+          <div className="mobile-more-divider" />
+          <div className="mobile-more-section">
+            <Button
+              variant="ghost"
+              className={`mobile-more-item ${currentPath === "/agent-board" ? "active" : ""}`}
+              onClick={() => onNavigate("/agent-board")}
+            >
+              <Bot />
+              <span>智能体看板</span>
+            </Button>
+          </div>
           <div className="mobile-more-divider" />
           <div className="mobile-more-section">
             <Button

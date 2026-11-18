@@ -756,3 +756,74 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
+
+@media (max-width: 899px) {
+  .agent-board {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+
+  .agent-board .middle-header {
+    padding: 14px 16px 8px;
+  }
+
+  .agent-board-header .title-row {
+    margin-bottom: 10px;
+  }
+
+  .agent-board-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .agent-board-filter {
+    width: 100%;
+  }
+
+  .agent-board-sync,
+  .agent-board-sync.error {
+    justify-content: flex-start;
+  }
+
+  .agent-board-columns {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: visible;
+    padding: 4px 16px 20px;
+  }
+
+  .agent-board-column {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .agent-board-column-body {
+    max-height: none;
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .agent-board-detail {
+    inset: 0;
+    width: 100%;
+    border-left: 0;
+  }
+
+  .agent-board-detail .detail-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 899px) {
+  .api-key-create-form {
+    flex-wrap: wrap;
+  }
+
+  .api-key-create-form .form-field,
+  .api-key-create-form .api-key-scope-field {
+    flex: 1 1 100%;
+  }
+}

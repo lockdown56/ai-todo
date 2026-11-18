@@ -4,11 +4,22 @@ from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth import require_auth
+from app.auth import require_auth, require_jwt_auth, require_todo_auth
 from app.config import get_settings
 from app.database import SessionLocal
 from app.errors import ApiError, api_error_handler, validation_error_handler
-from app.routers import api_keys, auth, checklist, groups, health, lists, smart_lists, tags, tasks
+from app.routers import (
+    agent_runs,
+    api_keys,
+    auth,
+    checklist,
+    groups,
+    health,
+    lists,
+    smart_lists,
+    tags,
+    tasks,
+)
 from app.services import initialize_data
 
 
@@ -33,14 +44,15 @@ def create_app(*, initialize: bool = True) -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(health.router)
     app.include_router(auth.router)
-    protected = [Depends(require_auth)]
+    protected = [Depends(require_todo_auth)]
     app.include_router(groups.router, dependencies=protected)
     app.include_router(lists.router, dependencies=protected)
     app.include_router(smart_lists.router, dependencies=protected)
     app.include_router(tasks.router, dependencies=protected)
     app.include_router(checklist.router, dependencies=protected)
     app.include_router(tags.router, dependencies=protected)
-    app.include_router(api_keys.router, dependencies=protected)
+    app.include_router(api_keys.router, dependencies=[Depends(require_jwt_auth)])
+    app.include_router(agent_runs.router, dependencies=[Depends(require_auth)])
     return app
 
 

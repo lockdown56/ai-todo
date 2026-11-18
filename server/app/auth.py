@@ -112,10 +112,20 @@ async def require_auth(
             "credential_type": "api_key",
             "sub": str(api_key.user_id),
             "api_key_id": str(api_key.id),
+            "api_key_name": api_key.name,
+            "scope": api_key.scope,
         }
     payload = decode_access_token(token, settings)
     payload["credential_type"] = "jwt"
     return payload
+
+
+async def require_todo_auth(
+    payload: Annotated[dict[str, Any], Depends(require_auth)],
+) -> dict[str, Any]:
+    if payload.get("credential_type") == "jwt" or payload.get("scope") == "todo_full":
+        return payload
+    raise ApiError(403, "API_KEY_NOT_ALLOWED", "此接口仅接受 JWT 或普通用途的 API Key")
 
 
 async def require_jwt_auth(

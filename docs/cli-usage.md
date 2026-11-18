@@ -1,6 +1,6 @@
 # AI 清单 CLI 使用文档
 
-`todo` 是 AI 清单 HTTP API 的命令行客户端，覆盖认证、API Key、清单与分组、任务、标签和检查项。
+`todo` 是 AI 清单 HTTP API 的命令行客户端，覆盖认证、API Key、清单与分组、任务、标签、检查项和智能体看板上报。
 
 ## 安装与开发
 
@@ -53,6 +53,7 @@ todo auth status
 todo auth logout
 
 todo api-key create --name "CI"
+todo api-key create --name "Codex · 工作电脑" --scope agent_reporter
 todo api-key ls
 todo api-key delete API_KEY_UUID --yes
 ```
@@ -61,6 +62,9 @@ todo api-key delete API_KEY_UUID --yes
 自动续期；`auth logout` 会先在服务端撤销 refresh token，再删除本地凭据。使用 API Key 登录时，
 `auth logout` 只删除本地保存的 Key，不会吊销服务端 Key；如需吊销请执行 `todo api-key delete`。
 自动化环境也可通过 `TODOLIST_API_KEY` 或一次性 `--api-key` 注入 API Key；创建时的明文只返回一次。
+
+`api-key create --scope` 可选 `todo_full`（普通业务，省略时默认）与 `agent_reporter`（智能体看板上报）。
+上报 Key 只能注册和更新自己创建的运行，不能调用普通待办接口；`api-key ls` 的返回同样包含 `scope`。
 
 ## 清单与分组
 
@@ -197,6 +201,69 @@ todo item complete TASK_UUID ITEM_UUID
 todo item reopen TASK_UUID ITEM_UUID
 todo item delete TASK_UUID ITEM_UUID --yes
 todo item reorder TASK_UUID ITEM_UUID_1 ITEM_UUID_2 ITEM_UUID_3
+```
+
+## 智能体看板
+
+智能体的每次实际工作对应看板上的一条运行：先用 `start` 注册（运行 UUID 由调用方生成），再带
+`--expected-version` 上报进展、待处理、恢复和结束。写入需要用途为 `agent_reporter` 的 API Key；
+看板读取和取消跟踪仍使用用户 JWT。
+
+所有写命令自动携带 `Idempotency-Key` 请求头：`--request-id` 省略时生成 UUID。网络失败重试时
+显式传入原请求 UUID、运行 ID、版本和内容；确认写入成功后保存响应里的 `version`，作为下一次的
+`--expected-version`。服务端响应的 `data` 为 `{"run_id": "<UUID>", "version": N}`。
+
+```bash
+todo agent start --id 6f1c9e0a-0000-4000-8000-000000000001 \
+  --title "排查支付回调异常" --workspace "payment-service" \
+  --session-ref "支付回调排查" --summary "已开始复现" \
+  --request-id 0a1b2c3d-0000-4000-8000-000000000002
+todo agent get 6f1c9e0a-0000-4000-8000-000000000001     # 查看当前状态和版本
+todo agent progress 6f1c9e0a-0000-4000-8000-000000000001 \
+  --expected-version 1 --summary "已定位重复回调"
+todo agent wait 6f1c9e0a-0000-4000-8000-000000000001 \
+  --expected-version 2 --reason "请回原会话确认是否运行数据库迁移"
+todo agent resume 6f1c9e0a-0000-4000-8000-000000000001 \
+  --expected-version 3 --summary "已在原会话确认，继续验证"
+todo agent finish 6f1c9e0a-0000-4000-8000-000000000001 \
+  --expected-version 4 --outcome succeeded --summary "回归验证完成"
+```
+
+| 命令 | 说明 |
+|---|---|
+| `todo agent start --id UUID --title TEXT` | 注册运行；可选 `--summary`、`--session-ref`、`--session-url`、`--workspace`、`--task-id UUID` |
+| `todo agent get RUN_ID` | 读取运行详情和当前版本 |
+| `todo agent progress RUN_ID --summary TEXT` | 上报进展 |
+| `todo agent wait RUN_ID --reason TEXT` | 标记「待我处理」并写明需要确认的事项 |
+| `todo agent resume RUN_ID --summary TEXT` | 用户处理后恢复为进行中 |
+| `todo agent finish RUN_ID --outcome succeeded\|failed\|cancelled --summary TEXT` | 上报结束结果 |
+
+- 除 `start` 外，所有写命令必须提供正整数 `--expected-version`，取值为上一次成功响应返回的 `version`；`--outcome` 仅接受 `succeeded`、`failed`、`cancelled`。
+- `start` 的 `--task-id` 必须属于当前用户且未被软删除；`--session-url` 必须是 HTTPS 链接，看板只在目标域名允许列表内提供跳转，其它链接仅显示可复制的会话标识。
+- 返回 409 时先 `todo agent get` 核对当前状态和版本，再决定是否上报；终态运行不能再次上报，版本过期不要用旧摘要直接覆盖。
+- 上报 Key 只能读写自己创建的运行，跨 Key 访问返回 404；它不能调用普通待办接口。看板的列表读取由桌面端以用户 JWT 完成，取消跟踪只接受用户 JWT。
+
+### 可复制到目标项目 AGENTS.md 的规则
+
+配置前提：在智能体实际运行 CLI 的环境设置 `TODOLIST_API_KEY`（独立的 `agent_reporter` Key，
+例如名为「Codex · 工作电脑」），API 地址通过 `TODOLIST_API_URL` 或 `--api-url` 指定。凭据不要
+写入工作仓库。建卡时传工作区标签和能取得的会话标识，然后按需把下面段落放入目标工作仓库的
+`AGENTS.md`：
+
+```markdown
+### 智能体看板上报
+
+- 接到新的实际工作时，用 UUID 作为 RUN_ID，执行
+  `todo agent start --id RUN_ID --title "任务标题" --workspace "项目名" --request-id UUID`。
+  有待办 ID 时附上 `--task-id`，有可定位的会话标识时附上 `--session-ref`。
+  普通闲聊不创建卡片。同一工作续轮沿用已有 RUN_ID。
+- 在当前对话保留最近一次成功响应的 run_id 和 version。明确存在旧卡但找不到
+  运行 ID 时，告诉用户需要用哪张卡，不重复创建。
+- 本轮最终回复前上报一次业务结果。还有后续工作用 progress 并写清下一步，
+  必须等用户在当前 Codex 会话处理时用 wait 并说明事项，整项工作结束才用 finish。
+  用户给出所需输入且工作实际恢复时先用 resume。
+- 每次更新传上一次成功响应的 `--expected-version` 和本次操作的 `--request-id`。
+  网络失败重试沿用原请求 UUID、版本与内容。上报失败时在本轮回复里简短说明。
 ```
 
 ## 输出、选择器与错误

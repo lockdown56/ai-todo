@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import sys
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import typer
 from typer.core import TyperGroup
@@ -322,15 +322,30 @@ def auth_logout(ctx: typer.Context) -> None:
 api_key_app = typer.Typer(help="API Key 管理", no_args_is_help=True)
 app.add_typer(api_key_app, name="api-key")
 
+VALID_API_KEY_SCOPES = ("todo_full", "agent_reporter")
+
 
 @api_key_app.command("create")
 def api_key_create(
     ctx: typer.Context,
     name: str = typer.Option(..., "--name", help="API Key 名称标签"),
+    scope: str | None = typer.Option(
+        None,
+        "--scope",
+        help="用途: todo_full（普通业务）或 agent_reporter（智能体上报）",
+    ),
 ) -> None:
     """创建 API Key（明文仅返回一次，请妥善保管）"""
+    body: dict[str, Any] = {"name": name}
+    if scope is not None:
+        if scope not in VALID_API_KEY_SCOPES:
+            cli_exit_error(
+                "CLI_USAGE_ERROR",
+                f"无效的 API Key 用途: {scope}，可选: {', '.join(VALID_API_KEY_SCOPES)}",
+            )
+        body["scope"] = scope
     with _make_client(ctx) as client:
-        data = client.post("/api/v1/api-keys", json={"name": name})
+        data = client.post("/api/v1/api-keys", json=body)
         _success(ctx, data)
 
 
@@ -1375,6 +1390,197 @@ def item_reorder(
             json={"item_ids": [str(i) for i in parsed_ids]},
         )
         _success(ctx, data)
+
+
+# ---------------------------------------------------------------------------
+# Agent board commands
+# ---------------------------------------------------------------------------
+agent_app = typer.Typer(help="智能体看板上报", no_args_is_help=True)
+app.add_typer(agent_app, name="agent")
+
+VALID_AGENT_OUTCOMES = ("succeeded", "failed", "cancelled")
+
+
+def _parse_agent_uuid(value: str, label: str) -> UUID:
+    try:
+        return UUID(value)
+    except ValueError:
+        cli_exit_error("CLI_USAGE_ERROR", f"{label} 不是有效的 UUID: {value}")
+        raise  # unreachable
+
+
+def _resolve_request_id(value: str | None) -> str:
+    if value is None:
+        return str(uuid4())
+    return str(_parse_agent_uuid(value, "--request-id"))
+
+
+def _validate_expected_version(value: int) -> int:
+    if value < 1:
+        cli_exit_error("CLI_USAGE_ERROR", "--expected-version 必须为正整数")
+    return value
+
+
+def _send_agent_event(
+    ctx: typer.Context,
+    run_id: UUID,
+    body: dict[str, Any],
+    request_id: str | None,
+) -> None:
+    request_key = _resolve_request_id(request_id)
+    with _make_client(ctx) as client:
+        data = client.post(
+            f"/api/v1/agent-runs/{run_id}/events",
+            json=body,
+            headers={"Idempotency-Key": request_key},
+        )
+        _success(ctx, data)
+
+
+@agent_app.command("start")
+def agent_start(
+    ctx: typer.Context,
+    run_id: str = typer.Option(..., "--id", help="运行 UUID（由调用方生成）"),
+    title: str = typer.Option(..., "--title", help="任务标题"),
+    summary: str | None = typer.Option(None, "--summary", help="初始进展摘要"),
+    session_ref: str | None = typer.Option(None, "--session-ref", help="会话标识或名称"),
+    session_url: str | None = typer.Option(None, "--session-url", help="会话链接 (HTTPS)"),
+    workspace: str | None = typer.Option(None, "--workspace", help="工作目录标签"),
+    task_id: str | None = typer.Option(None, "--task-id", help="关联待办 UUID"),
+    request_id: str | None = typer.Option(
+        None, "--request-id", help="幂等请求 UUID，省略时自动生成"
+    ),
+) -> None:
+    """注册一条运行（上报 Key 调用）"""
+    body: dict[str, Any] = {
+        "id": str(_parse_agent_uuid(run_id, "运行 ID")),
+        "title": title,
+    }
+    if summary is not None:
+        body["summary"] = summary
+    if session_ref is not None:
+        body["session_ref"] = session_ref
+    if session_url is not None:
+        body["session_url"] = session_url
+    if workspace is not None:
+        body["workspace_label"] = workspace
+    if task_id is not None:
+        body["task_id"] = str(_parse_agent_uuid(task_id, "--task-id"))
+    request_key = _resolve_request_id(request_id)
+    with _make_client(ctx) as client:
+        data = client.post(
+            "/api/v1/agent-runs",
+            json=body,
+            headers={"Idempotency-Key": request_key},
+        )
+        _success(ctx, data)
+
+
+@agent_app.command("get")
+def agent_get(
+    ctx: typer.Context,
+    run_id: str = typer.Argument(..., help="运行 UUID"),
+) -> None:
+    """获取运行详情（含当前版本）"""
+    rid = _parse_agent_uuid(run_id, "运行 ID")
+    with _make_client(ctx) as client:
+        data = client.get(f"/api/v1/agent-runs/{rid}")
+        _success(ctx, data)
+
+
+@agent_app.command("progress")
+def agent_progress(
+    ctx: typer.Context,
+    run_id: str = typer.Argument(..., help="运行 UUID"),
+    expected_version: int = typer.Option(..., "--expected-version", help="期望版本号（正整数）"),
+    summary: str = typer.Option(..., "--summary", help="进展摘要"),
+    request_id: str | None = typer.Option(
+        None, "--request-id", help="幂等请求 UUID，省略时自动生成"
+    ),
+) -> None:
+    """上报进展（running→running）"""
+    rid = _parse_agent_uuid(run_id, "运行 ID")
+    version = _validate_expected_version(expected_version)
+    _send_agent_event(
+        ctx,
+        rid,
+        {"type": "progress", "expected_version": version, "summary": summary},
+        request_id,
+    )
+
+
+@agent_app.command("wait")
+def agent_wait(
+    ctx: typer.Context,
+    run_id: str = typer.Argument(..., help="运行 UUID"),
+    expected_version: int = typer.Option(..., "--expected-version", help="期望版本号（正整数）"),
+    reason: str = typer.Option(..., "--reason", help="需要用户处理的事项"),
+    request_id: str | None = typer.Option(
+        None, "--request-id", help="幂等请求 UUID，省略时自动生成"
+    ),
+) -> None:
+    """上报待用户处理（→waiting_user）"""
+    rid = _parse_agent_uuid(run_id, "运行 ID")
+    version = _validate_expected_version(expected_version)
+    _send_agent_event(
+        ctx,
+        rid,
+        {"type": "wait", "expected_version": version, "reason": reason},
+        request_id,
+    )
+
+
+@agent_app.command("resume")
+def agent_resume(
+    ctx: typer.Context,
+    run_id: str = typer.Argument(..., help="运行 UUID"),
+    expected_version: int = typer.Option(..., "--expected-version", help="期望版本号（正整数）"),
+    summary: str = typer.Option(..., "--summary", help="恢复工作的摘要"),
+    request_id: str | None = typer.Option(
+        None, "--request-id", help="幂等请求 UUID，省略时自动生成"
+    ),
+) -> None:
+    """恢复进行中（waiting_user→running）"""
+    rid = _parse_agent_uuid(run_id, "运行 ID")
+    version = _validate_expected_version(expected_version)
+    _send_agent_event(
+        ctx,
+        rid,
+        {"type": "resume", "expected_version": version, "summary": summary},
+        request_id,
+    )
+
+
+@agent_app.command("finish")
+def agent_finish(
+    ctx: typer.Context,
+    run_id: str = typer.Argument(..., help="运行 UUID"),
+    expected_version: int = typer.Option(..., "--expected-version", help="期望版本号（正整数）"),
+    outcome: str = typer.Option(..., "--outcome", help="结束结果: succeeded/failed/cancelled"),
+    summary: str = typer.Option(..., "--summary", help="结果摘要"),
+    request_id: str | None = typer.Option(
+        None, "--request-id", help="幂等请求 UUID，省略时自动生成"
+    ),
+) -> None:
+    """上报结束结果（任一非终态→终态）"""
+    rid = _parse_agent_uuid(run_id, "运行 ID")
+    version = _validate_expected_version(expected_version)
+    if outcome not in VALID_AGENT_OUTCOMES:
+        cli_exit_error(
+            "CLI_USAGE_ERROR",
+            f"无效的结束结果: {outcome}，可选: {', '.join(VALID_AGENT_OUTCOMES)}",
+        )
+    _send_agent_event(
+        ctx,
+        rid,
+        {
+            "type": "finish",
+            "expected_version": version,
+            "outcome": outcome,
+            "summary": summary,
+        },
+        request_id,
+    )
 
 
 GLOBAL_OPTIONS_HELP = (

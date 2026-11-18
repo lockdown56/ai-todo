@@ -156,6 +156,53 @@ export interface ApiErrorPayload {
   };
 }
 
+export type AgentRunLane = "attention" | "active" | "history";
+export type AgentRunStatus =
+  | "running"
+  | "waiting_user"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "dismissed";
+
+export interface AgentRun {
+  id: string;
+  source: string;
+  title: string;
+  summary: string;
+  status: AgentRunStatus;
+  version: number;
+  session_ref: string | null;
+  session_url: string | null;
+  workspace_label: string | null;
+  task_id: string | null;
+  created_at: string;
+  updated_at: string;
+  status_changed_at: string;
+}
+
+export interface AgentRunPage {
+  items: AgentRun[];
+  next_cursor: string | null;
+}
+
+export interface AgentRunWriteResult {
+  run_id: string;
+  version: number;
+}
+
+export type AgentRunEventInput =
+  | { type: "progress"; expected_version: number; summary: string }
+  | { type: "wait"; expected_version: number; reason: string }
+  | { type: "resume"; expected_version: number; summary: string }
+  | {
+      type: "finish";
+      expected_version: number;
+      outcome: "succeeded" | "failed" | "cancelled";
+      summary: string;
+    }
+  | { type: "dismiss"; expected_version: number };
+
 export type TaskPatch = Partial<{
   list_id: string;
   title: string;
@@ -174,10 +221,13 @@ export type TaskPatch = Partial<{
   reminder_offset_minutes: number | null;
 }>;
 
+export type ApiKeyScope = "todo_full" | "agent_reporter";
+
 export interface ApiKey {
   id: string;
   name: string;
   key_prefix: string;
+  scope: ApiKeyScope;
   last_used_at: string | null;
   expires_at: string | null;
   created_at: string;

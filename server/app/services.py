@@ -460,13 +460,16 @@ def _hash_api_key(raw: str) -> str:
     return _hash_secret(raw)
 
 
-def create_api_key(session: AsyncSession, name: str) -> tuple[ApiKey, str]:
+def create_api_key(
+    session: AsyncSession, name: str, *, scope: str = "todo_full"
+) -> tuple[ApiKey, str]:
     raw = API_KEY_PREFIX + secrets.token_urlsafe(32)
     api_key = ApiKey(
         user_id=DEFAULT_USER_ID,
         name=name,
         key_hash=_hash_api_key(raw),
         key_prefix=raw[:API_KEY_PREFIX_DISPLAY_LEN],
+        scope=scope,
     )
     session.add(api_key)
     return api_key, raw

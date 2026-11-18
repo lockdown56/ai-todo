@@ -1,10 +1,11 @@
 ---
 name: todo-cli
 description: >
-  AI 清单 CLI 操作技能。使用 `todo` 命令管理任务、清单、标签和检查项。
+  AI 清单 CLI 操作技能。使用 `todo` 命令管理任务、清单、标签和检查项，
+  以及智能体看板运行上报。
   当用户需要创建/查询/更新/删除任务、管理清单、标签、检查项、
   或任何待办事项相关操作时使用此技能。
-  触发词：任务、清单、待办、todo、task、标签、tag、检查项、item。
+  触发词：任务、清单、待办、todo、task、标签、tag、检查项、item、智能体看板、agent。
 ---
 
 # AI 清单 CLI
@@ -39,6 +40,13 @@ todo [全局选项] <资源> <命令> [参数]
 登录会话会自动使用 refresh token 续期；`todo auth logout` 会撤销服务端会话。
 API Key 可用 `todo auth login --api-key tdl_xxx` 验证并按 API 地址保存；API Key 登出只删除
 本地凭据，不会吊销服务端 Key。
+
+API Key 用途由创建时的 `--scope` 指定：`todo_full`（普通业务，省略时默认）或
+`agent_reporter`（智能体看板上报）。上报 Key 只能读写自己创建的运行，不能调用普通待办接口。
+
+```bash
+todo api-key create --name "Codex · 工作电脑" --scope agent_reporter
+```
 
 ### 任务 (task)
 
@@ -112,6 +120,24 @@ todo item reopen TASK_ID ITEM_ID
 todo item delete TASK_ID ITEM_ID --yes
 todo item reorder TASK_ID ITEM_ID1 ITEM_ID2 ...
 ```
+
+### 智能体看板 (agent)
+
+运行 UUID 由调用方生成；所有写命令自动带 `Idempotency-Key` 请求头，`--request-id` 省略时
+生成 UUID。网络失败重试沿用原请求 UUID、版本与内容。除 `start` 外必须传上一次成功响应的
+`version` 作为 `--expected-version`（正整数）。
+
+```bash
+todo agent start --id UUID --title TITLE [--summary TEXT] [--session-ref TEXT] [--session-url HTTPS] [--workspace TEXT] [--task-id UUID] [--request-id UUID]
+todo agent get RUN_ID
+todo agent progress RUN_ID --expected-version N --summary TEXT [--request-id UUID]
+todo agent wait RUN_ID --expected-version N --reason TEXT [--request-id UUID]
+todo agent resume RUN_ID --expected-version N --summary TEXT [--request-id UUID]
+todo agent finish RUN_ID --expected-version N --outcome succeeded|failed|cancelled --summary TEXT [--request-id UUID]
+```
+
+- `finish` 后运行不可再更新；版本冲突返回 409，先 `todo agent get` 核对再决定是否上报。
+- 写命令使用 `agent_reporter` Key（通过 `TODOLIST_API_KEY` 注入）；看板读取和取消跟踪使用 JWT。
 
 ## 选择器规则
 

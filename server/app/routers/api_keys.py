@@ -22,13 +22,14 @@ async def create_api_key_endpoint(
     body: ApiKeyCreate,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ApiKeyCreatedResponse:
-    api_key, raw = create_api_key(session, body.name)
+    api_key, raw = create_api_key(session, body.name, scope=body.scope)
     await session.commit()
     await session.refresh(api_key)
     return ApiKeyCreatedResponse(
         id=api_key.id,
         name=api_key.name,
         key_prefix=api_key.key_prefix,
+        scope=api_key.scope,
         last_used_at=api_key.last_used_at,
         expires_at=api_key.expires_at,
         created_at=api_key.created_at,

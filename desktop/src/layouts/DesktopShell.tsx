@@ -8,6 +8,7 @@ import { TaskListPanel } from "@/features/tasks/TaskListPanel";
 import { TaskDetail } from "@/features/tasks/TaskDetail";
 import { SettingsPage } from "@/features/account/SettingsPage";
 import { ProfilePage } from "@/features/account/ProfilePage";
+import { AgentBoardPage } from "@/features/agent-board/AgentBoardPage";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ConnectionError } from "@/components/ConnectionError";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -69,6 +70,7 @@ export function DesktopShell() {
     currentSmartList,
     isSettingsRoute,
     isProfileRoute,
+    isAgentBoardRoute,
     isUtilityRoute,
     
     editorRef,
@@ -222,6 +224,7 @@ export function DesktopShell() {
         className={[
           "app-shell",
           isUtilityRoute ? "settings-mode" : "",
+          isAgentBoardRoute ? "agent-board-mode" : "",
           effectiveSidebarCollapsed ? "sidebar-collapsed" : "",
           compactSidebar ? "compact-sidebar" : "",
           sidebarOverlayOpen ? "sidebar-overlay-open" : "",
@@ -315,6 +318,8 @@ export function DesktopShell() {
             <SettingsPage />
           ) : isProfileRoute ? (
             <ProfilePage />
+          ) : isAgentBoardRoute ? (
+            <AgentBoardPage />
           ) : (
             <>
               <TaskHeader
@@ -426,7 +431,7 @@ export function DesktopShell() {
             </>
           )}
         </main>
-        {!isUtilityRoute && detailDrawer && selectedTaskId && (
+        {!isUtilityRoute && !isAgentBoardRoute && detailDrawer && selectedTaskId && (
           <button
             className="detail-backdrop"
             onClick={() => void closeDetail()}
@@ -434,7 +439,7 @@ export function DesktopShell() {
           />
         )}
         <aside className="detail-panel">
-          {isUtilityRoute ? null : selectedTaskId ? (
+          {isUtilityRoute || isAgentBoardRoute ? null : selectedTaskId ? (
             <TaskDetail
               ref={editorRef}
               taskId={selectedTaskId}

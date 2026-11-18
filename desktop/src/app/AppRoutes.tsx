@@ -70,6 +70,7 @@ export function AppRoutes() {
       <Route path="/view/:view" element={<ProtectedShell />} />
       <Route path="/list/:listId" element={<ProtectedShell />} />
       <Route path="/smart-list/:smartListId" element={<ProtectedShell />} />
+      <Route path="/agent-board" element={<ProtectedShell />} />
       <Route path="/profile" element={<ProtectedShell />} />
       <Route path="/settings" element={<SettingsRoute />} />
       <Route path="*" element={<Navigate to={getDefaultWorkspaceRoute()} replace />} />

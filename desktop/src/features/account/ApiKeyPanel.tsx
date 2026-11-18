@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -16,7 +23,16 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api, ApiError } from "@/api";
 import { queryKeys } from "@/query";
 import { errorMessage } from "@/lib/error-utils";
-import type { ApiKeyCreated } from "@/types";
+import type { ApiKeyCreated, ApiKeyScope } from "@/types";
+
+const apiKeyScopeLabels: Record<ApiKeyScope, string> = {
+  todo_full: "普通",
+  agent_reporter: "智能体上报",
+};
+
+function apiKeyScopeLabel(scope: ApiKeyScope | undefined): string {
+  return scope ? apiKeyScopeLabels[scope] : "普通";
+}
 
 function formatTimestamp(value: string | null): string {
   if (!value) return "—";
@@ -32,6 +48,7 @@ function formatTimestamp(value: string | null): string {
 export function ApiKeyPanel() {
   const queryClient = useQueryClient();
   const [newName, setNewName] = useState("");
+  const [newScope, setNewScope] = useState<ApiKeyScope>("todo_full");
   const [createdKey, setCreatedKey] = useState<ApiKeyCreated | null>(null);
   const [copied, setCopied] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
@@ -43,10 +60,12 @@ export function ApiKeyPanel() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (name: string) => api.createApiKey(name),
+    mutationFn: ({ name, scope }: { name: string; scope: ApiKeyScope }) =>
+      api.createApiKey(name, scope),
     onSuccess: (created) => {
       setCreatedKey(created);
       setNewName("");
+      setNewScope("todo_full");
       setCreateError("");
       setCopied(false);
       void queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys });
@@ -67,7 +86,7 @@ export function ApiKeyPanel() {
   const handleCreate = () => {
     const name = newName.trim();
     if (!name) return;
-    createMutation.mutate(name);
+    createMutation.mutate({ name, scope: newScope });
   };
 
   const handleCopy = async () => {
@@ -84,7 +103,7 @@ export function ApiKeyPanel() {
     <section className="settings-card api-keys-card" aria-label="API Key 管理">
       <h2 className="settings-section-title">API Key</h2>
       <p className="settings-help">
-        API Key 可用于 CLI 脚本和自动化场景的认证，作为登录令牌的长期替代。创建后明文仅显示一次，请妥善保管。
+        API Key 可用于 CLI 脚本和自动化场景的认证，作为登录令牌的长期替代。创建后明文仅显示一次，请妥善保管。需要让智能体上报看板时，请选择「智能体上报」用途。
       </p>
 
       <form
@@ -105,6 +124,18 @@ export function ApiKeyPanel() {
             maxLength={100}
             autoComplete="off"
           />
+        </div>
+        <div className="form-field api-key-scope-field">
+          <Label htmlFor="api-key-scope">用途</Label>
+          <Select value={newScope} onValueChange={(value) => setNewScope(value as ApiKeyScope)}>
+            <SelectTrigger id="api-key-scope" className="api-key-scope-trigger" aria-label="用途">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todo_full">普通（CLI 与自动化）</SelectItem>
+              <SelectItem value="agent_reporter">智能体上报</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <Button type="submit" disabled={createMutation.isPending || !newName.trim()}>
           {createMutation.isPending ? <LoaderCircle className="spin" /> : <Plus />}
@@ -127,6 +158,9 @@ export function ApiKeyPanel() {
                 <div className="api-key-name-row">
                   <KeyRound className="api-key-icon" />
                   <strong>{key.name}</strong>
+                  <Badge variant="secondary" className="api-key-scope">
+                    {apiKeyScopeLabel(key.scope)}
+                  </Badge>
                   <Badge variant="secondary" className="api-key-prefix">{key.key_prefix}…</Badge>
                 </div>
                 <dl className="api-key-meta">
@@ -173,7 +207,7 @@ export function ApiKeyPanel() {
               </Button>
             </div>
             <div className="api-key-reveal-hint">
-              名称：{createdKey.name} · 前缀：{createdKey.key_prefix}…
+              名称：{createdKey.name} · 用途：{apiKeyScopeLabel(createdKey.scope)} · 前缀：{createdKey.key_prefix}…
             </div>
             <Button type="button" onClick={() => setCreatedKey(null)}>
               我已保存，关闭

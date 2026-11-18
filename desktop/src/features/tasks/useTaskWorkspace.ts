@@ -97,6 +97,7 @@ export function useTaskWorkspace() {
       : `view:${scope.view}`;
   const isSettingsRoute = location.pathname === "/settings";
   const isProfileRoute = location.pathname === "/profile";
+  const isAgentBoardRoute = location.pathname === "/agent-board";
   const isUtilityRoute = isSettingsRoute || isProfileRoute;
 
   useEffect(() => {
@@ -112,21 +113,36 @@ export function useTaskWorkspace() {
   );
 
   useEffect(() => {
-    if (isUtilityRoute) return;
+    if (isUtilityRoute || isAgentBoardRoute) return;
     setLastWorkspaceRoute(location.pathname, location.search);
     if (selectedTaskId) {
       setSelectedTaskId(scopeKey, selectedTaskId);
     }
-  }, [location.pathname, location.search, scopeKey, selectedTaskId, isUtilityRoute]);
+  }, [
+    location.pathname,
+    location.search,
+    scopeKey,
+    selectedTaskId,
+    isUtilityRoute,
+    isAgentBoardRoute,
+  ]);
 
   useEffect(() => {
-    if (isUtilityRoute || selectedTaskId) return;
+    if (isUtilityRoute || isAgentBoardRoute || selectedTaskId) return;
     const savedTaskId = getSelectedTaskId(scopeKey);
     if (!savedTaskId) return;
     const searchParams = new URLSearchParams(location.search);
     searchParams.set("task", savedTaskId);
     navigate(`${location.pathname}?${searchParams}`, { replace: true });
-  }, [scopeKey, isUtilityRoute, selectedTaskId, location.pathname, location.search, navigate]);
+  }, [
+    scopeKey,
+    isUtilityRoute,
+    isAgentBoardRoute,
+    selectedTaskId,
+    location.pathname,
+    location.search,
+    navigate,
+  ]);
 
   const setSort = useCallback(
     (value: TaskSort) => {
@@ -140,7 +156,8 @@ export function useTaskWorkspace() {
     queryKey: queryKeys.health,
     queryFn: api.health,
     retry: false,
-    refetchInterval: 30_000,
+    // 看板页面不轮询；打开、回焦和手动刷新由看板自己触发。
+    refetchInterval: isAgentBoardRoute ? false : 30_000,
   });
   const lists = useQuery({ queryKey: queryKeys.lists, queryFn: api.lists });
   const listGroups = useQuery({ queryKey: queryKeys.listGroups, queryFn: api.listGroups });
@@ -189,7 +206,9 @@ export function useTaskWorkspace() {
       }),
     initialPageParam: "",
     getNextPageParam: (page) => page.next_cursor || undefined,
-    enabled: health.isSuccess && (!scope.smartListId || currentSmartList !== undefined),
+    enabled: health.isSuccess
+      && !isAgentBoardRoute
+      && (!scope.smartListId || currentSmartList !== undefined),
   });
   const overdueTasksQuery = useInfiniteQuery({
     queryKey: queryKeys.tasks(`${scopeKey}:overdue`, debouncedSearch, sort),
@@ -202,7 +221,7 @@ export function useTaskWorkspace() {
     }),
     initialPageParam: "",
     getNextPageParam: (page) => page.next_cursor || undefined,
-    enabled: health.isSuccess && scope.view === "today",
+    enabled: health.isSuccess && !isAgentBoardRoute && scope.view === "today",
   });
   const completedTasksQuery = useInfiniteQuery({
     queryKey: queryKeys.tasks(
@@ -222,7 +241,9 @@ export function useTaskWorkspace() {
       }),
     initialPageParam: "",
     getNextPageParam: (page) => page.next_cursor || undefined,
-    enabled: health.isSuccess && (!!listScopeId || hasSeparateCompletedTasks),
+    enabled: health.isSuccess
+      && !isAgentBoardRoute
+      && (!!listScopeId || hasSeparateCompletedTasks),
   });
 
   const taskItems = useMemo(
@@ -545,6 +566,7 @@ export function useTaskWorkspace() {
     currentSmartList,
     isSettingsRoute,
     isProfileRoute,
+    isAgentBoardRoute,
     isUtilityRoute,
     
     // Refs

@@ -89,7 +89,24 @@ CLI 命令与 FastAPI 端点的对应关系。
 | `todo api-key ls` | `GET /api/v1/api-keys` |
 | `todo api-key delete` | `DELETE /api/v1/api-keys/{id}` |
 
-刷新成功后 CLI 保存轮换后的 access token 和 refresh token。
+刷新成功后 CLI 保存轮换后的 access token 和 refresh token。`api-key create --scope` 映射到创建
+请求体的 `scope`：`todo_full`（默认）或 `agent_reporter`；省略时不发送该字段，由服务端默认。
+`api-key ls` 的每项同样返回 `scope`。
+
+## 智能体看板
+
+| CLI | HTTP | 备注 |
+|---|---|---|
+| `todo agent start` | `POST /api/v1/agent-runs` | 头 `Idempotency-Key`；body `id,title,summary?,session_ref?,session_url?,workspace_label?,task_id?` |
+| `todo agent get RUN_ID` | `GET /api/v1/agent-runs/{id}` | |
+| `todo agent progress` | `POST /api/v1/agent-runs/{id}/events` | `{"type":"progress","expected_version":N,"summary":"..."}` |
+| `todo agent wait` | 同上 | `{"type":"wait","expected_version":N,"reason":"..."}` |
+| `todo agent resume` | 同上 | `{"type":"resume","expected_version":N,"summary":"..."}` |
+| `todo agent finish` | 同上 | `{"type":"finish","expected_version":N,"outcome":"...","summary":"..."}` |
+
+所有写命令的 `--request-id` 对应请求头 `Idempotency-Key`；省略时由 CLI 生成 UUID。`--workspace`
+映射为 `workspace_label`，`--task-id` 映射 `task_id`。写命令需要 `agent_reporter` Key；看板读取
+（`GET /api/v1/agent-runs`）与取消跟踪（`dismiss` 事件）由桌面端以用户 JWT 调用，CLI 不提供。
 
 ## 清单分组
 

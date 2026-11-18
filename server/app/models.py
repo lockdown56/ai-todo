@@ -240,17 +240,79 @@ class TaskTag(Base):
 
 class ApiKey(TimestampMixin, Base):
     __tablename__ = "api_keys"
-    __table_args__ = (Index("ix_api_keys_user", "user_id"),)
+    __table_args__ = (
+        CheckConstraint("scope IN ('todo_full', 'agent_reporter')", name="ck_api_keys_scope"),
+        Index("ix_api_keys_user", "user_id"),
+    )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     key_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
+    scope: Mapped[str] = mapped_column(String(20), nullable=False, default="todo_full")
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship()
+
+
+class AgentRun(Base):
+    __tablename__ = "agent_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('running', 'waiting_user', 'succeeded', 'failed', 'cancelled', "
+            "'dismissed')",
+            name="ck_agent_runs_status",
+        ),
+        CheckConstraint("version > 0", name="ck_agent_runs_version"),
+        Index("ix_agent_runs_user_status_updated", "user_id", "status", "updated_at", "id"),
+        Index(
+            "ix_agent_runs_user_status_changed",
+            "user_id",
+            "status",
+            "status_changed_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    reporter_key_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("api_keys.id", ondelete="SET NULL")
+    )
+    source: Mapped[str] = mapped_column(String(100), nullable=False)
+    session_ref: Mapped[str | None] = mapped_column(String(300))
+    session_url: Mapped[str | None] = mapped_column(String(1000))
+    workspace_label: Mapped[str | None] = mapped_column(String(300))
+    task_id: Mapped[UUID | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"))
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    status_changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship()
+    reporter_key: Mapped[ApiKey | None] = relationship()
+    task: Mapped[Task | None] = relationship()
+
+
+class AgentWriteReceipt(Base):
+    __tablename__ = "agent_write_receipts"
+
+    actor: Mapped[str] = mapped_column(String(100), primary_key=True)
+    request_id: Mapped[UUID] = mapped_column(primary_key=True)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    run_id: Mapped[UUID] = mapped_column(ForeignKey("agent_runs.id"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class RefreshToken(TimestampMixin, Base):

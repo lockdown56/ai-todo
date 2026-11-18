@@ -1,7 +1,13 @@
 import type {
+  AgentRun,
+  AgentRunEventInput,
+  AgentRunLane,
+  AgentRunPage,
+  AgentRunWriteResult,
   ApiErrorPayload,
   ApiKey,
   ApiKeyCreated,
+  ApiKeyScope,
   AuthToken,
   AuthUser,
   ChecklistItem,
@@ -213,8 +219,12 @@ async function requestFromBase<T>(baseUrl: string, path: string): Promise<T> {
   }
 }
 
-function json(method: string, body?: unknown): RequestInit {
-  return { method, body: body === undefined ? undefined : JSON.stringify(body) };
+function json(method: string, body?: unknown, headers?: HeadersInit): RequestInit {
+  return {
+    method,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    ...(headers ? { headers } : {}),
+  };
 }
 
 export const api = {
@@ -314,9 +324,36 @@ export const api = {
     request<ChecklistItem[]>(`/api/v1/tasks/${taskId}/items/reorder`, json("POST", { item_ids: itemIds })),
 
   apiKeys: () => request<ApiKey[]>("/api/v1/api-keys"),
-  createApiKey: (name: string) =>
-    request<ApiKeyCreated>("/api/v1/api-keys", json("POST", { name })),
+  createApiKey: (name: string, scope: ApiKeyScope = "todo_full") =>
+    request<ApiKeyCreated>("/api/v1/api-keys", json("POST", { name, scope })),
   deleteApiKey: (id: string) => request<void>(`/api/v1/api-keys/${id}`, json("DELETE")),
+
+  agentRuns: (params: {
+    lane: AgentRunLane;
+    source?: string;
+    cursor?: string;
+    limit: number;
+  }) => {
+    const search = new URLSearchParams({ lane: params.lane, limit: String(params.limit) });
+    if (params.source) search.set("source", params.source);
+    if (params.cursor) search.set("cursor", params.cursor);
+    return request<AgentRunPage>(`/api/v1/agent-runs?${search}`);
+  },
+  agentRun: (id: string) => request<AgentRun>(`/api/v1/agent-runs/${id}`),
+  agentRunEvent: (id: string, body: AgentRunEventInput, requestId: string) =>
+    request<AgentRunWriteResult>(
+      `/api/v1/agent-runs/${id}/events`,
+      json("POST", body, { "Idempotency-Key": requestId }),
+    ),
+  dismissAgentRun: (id: string, expectedVersion: number, requestId: string) =>
+    request<AgentRunWriteResult>(
+      `/api/v1/agent-runs/${id}/events`,
+      json(
+        "POST",
+        { type: "dismiss", expected_version: expectedVersion } satisfies AgentRunEventInput,
+        { "Idempotency-Key": requestId },
+      ),
+    ),
 };
 
 export async function testApiBaseUrl(baseUrl: string): Promise<Health> {

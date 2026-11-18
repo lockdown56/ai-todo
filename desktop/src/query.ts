@@ -1,3 +1,5 @@
+import type { AgentRunLane } from "./types";
+
 export const queryKeys = {
   health: ["health"] as const,
   auth: ["auth"] as const,
@@ -13,4 +15,6 @@ export const queryKeys = {
   task: (id: string) => ["task", id] as const,
   tags: ["tags"] as const,
   apiKeys: ["api-keys"] as const,
+  agentRuns: (lane: AgentRunLane, source: string) => ["agent-runs", lane, source] as const,
+  agentRun: (id: string) => ["agent-run", id] as const,
 };

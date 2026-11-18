@@ -1,5 +1,6 @@
-from datetime import date, datetime
-from typing import Literal
+from datetime import UTC, date, datetime
+from typing import Annotated, Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -30,8 +31,12 @@ class AuthUserResponse(BaseModel):
     display_name: str
 
 
+ApiKeyScope = Literal["todo_full", "agent_reporter"]
+
+
 class ApiKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    scope: ApiKeyScope = "todo_full"
 
     @field_validator("name")
     @classmethod
@@ -45,6 +50,7 @@ class ApiKeyResponse(ApiModel):
     id: UUID
     name: str
     key_prefix: str
+    scope: str
     last_used_at: datetime | None
     expires_at: datetime | None
     created_at: datetime
@@ -389,3 +395,178 @@ class TaskPage(BaseModel):
 TaskView = Literal["inbox", "today", "all", "completed", "trash"]
 TaskDateSection = Literal["today", "overdue"]
 TaskSort = Literal["manual", "created_asc", "created_desc", "due_asc", "priority_desc"]
+
+
+AgentRunStatus = Literal[
+    "running",
+    "waiting_user",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "dismissed",
+]
+AgentRunLane = Literal["attention", "active", "history"]
+AgentRunOutcome = Literal["succeeded", "failed", "cancelled"]
+
+
+def _strip_text(value: object) -> object:
+    return value.strip() if isinstance(value, str) else value
+
+
+class AgentRunCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    title: str = Field(max_length=160)
+    summary: str | None = Field(default=None, max_length=2000)
+    session_ref: str | None = Field(default=None, max_length=300)
+    session_url: str | None = Field(default=None, max_length=1000)
+    workspace_label: str | None = Field(default=None, max_length=300)
+    task_id: UUID | None = None
+
+    @field_validator(
+        "title", "summary", "session_ref", "session_url", "workspace_label", mode="before"
+    )
+    @classmethod
+    def strip_fields(cls, value: object) -> object:
+        return _strip_text(value)
+
+    @field_validator("title")
+    @classmethod
+    def require_title(cls, value: str) -> str:
+        if not value:
+            raise ValueError("标题不能为空")
+        return value
+
+    @field_validator("session_ref", "session_url", "workspace_label")
+    @classmethod
+    def empty_optional_text_to_none(cls, value: str | None) -> str | None:
+        return value or None
+
+    @field_validator("session_url")
+    @classmethod
+    def validate_session_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("会话链接必须是带主机名的 HTTPS 地址")
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("会话链接不能包含账号密码")
+        return value
+
+
+class AgentRunEventBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version: int = Field(gt=0)
+
+
+class AgentProgressEvent(AgentRunEventBase):
+    type: Literal["progress"]
+    summary: str = Field(max_length=2000)
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def strip_summary(cls, value: object) -> object:
+        return _strip_text(value)
+
+    @field_validator("summary")
+    @classmethod
+    def require_summary(cls, value: str) -> str:
+        if not value:
+            raise ValueError("进展摘要不能为空")
+        return value
+
+
+class AgentWaitEvent(AgentRunEventBase):
+    type: Literal["wait"]
+    reason: str = Field(max_length=2000)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def strip_reason(cls, value: object) -> object:
+        return _strip_text(value)
+
+    @field_validator("reason")
+    @classmethod
+    def require_reason(cls, value: str) -> str:
+        if not value:
+            raise ValueError("待处理原因不能为空")
+        return value
+
+
+class AgentResumeEvent(AgentRunEventBase):
+    type: Literal["resume"]
+    summary: str = Field(max_length=2000)
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def strip_summary(cls, value: object) -> object:
+        return _strip_text(value)
+
+    @field_validator("summary")
+    @classmethod
+    def require_summary(cls, value: str) -> str:
+        if not value:
+            raise ValueError("恢复摘要不能为空")
+        return value
+
+
+class AgentFinishEvent(AgentRunEventBase):
+    type: Literal["finish"]
+    outcome: AgentRunOutcome
+    summary: str = Field(max_length=2000)
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def strip_summary(cls, value: object) -> object:
+        return _strip_text(value)
+
+    @field_validator("summary")
+    @classmethod
+    def require_summary(cls, value: str) -> str:
+        if not value:
+            raise ValueError("结果摘要不能为空")
+        return value
+
+
+class AgentDismissEvent(AgentRunEventBase):
+    type: Literal["dismiss"]
+
+
+AgentRunEvent = Annotated[
+    AgentProgressEvent | AgentWaitEvent | AgentResumeEvent | AgentFinishEvent | AgentDismissEvent,
+    Field(discriminator="type"),
+]
+
+
+class AgentRunWriteResponse(BaseModel):
+    run_id: UUID
+    version: int
+
+
+class AgentRunResponse(BaseModel):
+    id: UUID
+    source: str
+    title: str
+    summary: str
+    status: AgentRunStatus
+    version: int
+    session_ref: str | None
+    session_url: str | None
+    workspace_label: str | None
+    task_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
+    status_changed_at: datetime
+
+    @field_validator("created_at", "updated_at", "status_changed_at")
+    @classmethod
+    def normalize_utc(cls, value: datetime) -> datetime:
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+class AgentRunPage(BaseModel):
+    items: list[AgentRunResponse]
+    next_cursor: str | None
