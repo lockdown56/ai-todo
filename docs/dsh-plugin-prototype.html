@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 清单 · DSH 任务工作台</title>
+<style>
+  :root { font: 15px/1.55 Inter, "Microsoft YaHei", system-ui, sans-serif; color: #22283a; background: #f4f6fa; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button, input, select, textarea { border: 1px solid #dbe0eb; background: white; border-radius: 9px; padding: 8px 12px; }
+  button { cursor: pointer; }
+  button:enabled:hover { border-color: #4563cd; }
+  button:disabled { opacity: .55; cursor: default; }
+  :focus-visible { outline: 2px solid #3658ce; outline-offset: 3px; }
+  h1, h2, h3, p { margin: 0; }
+  small { color: #58647a; }
+  .layout { display: grid; grid-template-columns: 185px minmax(0, 1fr); min-height: 100vh; }
+  nav { padding: 26px 16px; border-right: 1px solid #dbe0eb; }
+  nav strong { display: block; margin-bottom: 24px; }
+  nav button { display: block; width: 100%; text-align: left; margin: 6px 0; }
+  [aria-pressed="true"] { background: #e9eeff; color: #2546af; font-weight: 650; }
+  main { padding: clamp(18px, 4vw, 54px); }
+  header { margin-bottom: 24px; }
+  h1 { font-size: 30px; }
+  h2 { font-size: 20px; overflow-wrap: anywhere; }
+  h3 { font-size: 15px; }
+  .columns { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 5fr); gap: 18px; }
+  section { background: white; border: 1px solid #dbe0eb; border-radius: 14px; padding: 20px; }
+  form, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0; }
+  input { flex: 1 1 140px; min-width: 0; }
+  textarea { display: block; width: 100%; resize: vertical; margin: 6px 0 12px; }
+  label { font-weight: 600; }
+  .primary { color: white; background: #3658ce; border-color: #3658ce; }
+  .task { display: block; width: 100%; text-align: left; margin-top: 8px; overflow-wrap: anywhere; }
+  .task small { display: block; }
+  .detail-header { margin-bottom: 16px; }
+  .run { border-top: 1px solid #dbe0eb; padding: 12px 0; }
+  .run button { margin-top: 6px; }
+  .feedback { min-height: 24px; margin: 8px 0; color: #35497f; }
+  dialog { width: min(540px, 92vw); border: 1px solid #dbe0eb; border-radius: 14px; padding: 24px; }
+  dialog::backdrop { background: #181e3580; }
+  #session-input { white-space: pre-wrap; overflow-wrap: anywhere; margin: 14px 0; }
+  [hidden] { display: none !important; }
+  @media (max-width: 940px) { .columns { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { border-right: 0; border-bottom: 1px solid #dbe0eb; padding: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    nav strong, nav button { width: auto; margin: 0; }
+  }
+</style>
+<div class="layout">
+  <nav aria-label="清单">
+    <strong>DeepSeek Harness</strong>
+    <button type="button" data-list="inbox" aria-pressed="true">收件箱</button>
+    <button type="button" data-list="project" aria-pressed="false">项目工作</button>
+  </nav>
+  <main>
+    <header>
+      <h1>AI 清单</h1>
+      <small>交互原型 · Agent 执行使用模拟数据</small>
+    </header>
+    <div class="columns">
+      <section aria-labelledby="list-title">
+        <h2 id="list-title">收件箱</h2>
+        <form id="create">
+          <input id="title" aria-label="任务标题" placeholder="输入要收集的任务" maxlength="500" required>
+          <select id="destination" aria-label="保存到清单">
+            <option value="inbox">收件箱</option>
+            <option value="project">项目工作</option>
+          </select>
+          <button class="primary">添加</button>
+        </form>
+        <div id="tasks"></div>
+        <p id="empty" hidden>这个清单还没有任务。</p>
+      </section>
+      <section aria-label="任务详情">
+        <p id="no-selection" hidden>选择一项任务，或添加一个新任务。</p>
+        <div id="detail">
+          <div class="detail-header">
+            <h2 id="task-title"></h2>
+            <small id="task-state"></small>
+          </div>
+          <form id="start">
+            <div style="width: 100%">
+              <label for="instructions">执行说明</label>
+              <textarea id="instructions" rows="4" placeholder="输入资料、预期产物和验收要求" required></textarea>
+              <label for="workspace">执行工作区</label>
+              <select id="workspace" required>
+                <option value="">选择 DSH 工作区</option>
+                <option value="团队文档">团队文档</option>
+                <option value="发布项目">发布项目</option>
+              </select>
+              <small>为这项任务记住工作区。更改后用于下一轮执行。</small>
+            </div>
+            <button id="start-button" class="primary">启动 Agent</button>
+            <button id="accept" type="button" hidden>验收并完成</button>
+          </form>
+          <h3>执行记录</h3>
+          <div id="runs"></div>
+        </div>
+      </section>
+    </div>
+    <p class="feedback" id="feedback" role="status"></p>
+  </main>
+</div>
+<dialog id="session">
+  <form method="dialog"><button>返回任务</button></form>
+  <h2 id="session-title"></h2>
+  <p id="session-input"></p>
+  <p id="session-result"></p>
+</dialog>
+<script>
+  const get = (id) => document.getElementById(id);
+  const lists = { inbox: "收件箱", project: "项目工作" };
+  const tasks = [
+    { title: "整理会议纪要", list: "inbox", instructions: "根据工作区的会议记录，整理决策、行动项、负责人和截止日期。缺失信息标记为待确认。", workspace: "团队文档", runs: [] },
+    { title: "复核本周发布计划", list: "project", instructions: "检查发布步骤、验证项和回滚条件，列出需要确认的风险。", workspace: "发布项目", runs: [] },
+  ];
+  const listButtons = [...document.querySelectorAll("[data-list]")];
+  let list = "inbox";
+  let selected = tasks[0];
+  let nextRun = 1;
+  let openRun = null;
+  const latest = (task) => task?.runs[0];
+  const state = (task) => task.done ? "已完成" : latest(task)?.status || "待执行";
+
+  function feedback(message) {
+    get("feedback").textContent = message;
+  }
+
+  function renderList() {
+    get("list-title").textContent = lists[list];
+    for (const button of listButtons) {
+      button.setAttribute("aria-pressed", String(button.dataset.list === list));
+    }
+    const visible = tasks.filter((task) => task.list === list);
+    get("empty").hidden = visible.length > 0;
+    get("tasks").replaceChildren(...visible.map((task) => {
+      const button = document.createElement("button");
+      button.className = "task";
+      button.type = "button";
+      button.textContent = task.title;
+      button.setAttribute("aria-pressed", String(task === selected));
+      const status = document.createElement("small");
+      status.textContent = state(task);
+      button.append(status);
+      button.addEventListener("click", () => selectTask(task));
+      return button;
+    }));
+  }
+
+  function renderRuns() {
+    const run = latest(selected);
+    get("task-state").textContent = state(selected);
+    get("start-button").disabled = Boolean(selected.done || run?.status === "执行中");
+    get("start-button").textContent = run ? "启动新一轮" : "启动 Agent";
+    get("accept").hidden = selected.done || run?.status !== "待验收";
+    if (!run) {
+      get("runs").textContent = "暂无执行记录。";
+      return;
+    }
+    get("runs").replaceChildren(...selected.runs.map((entry) => {
+      const row = document.createElement("div");
+      row.className = "run";
+      const summary = document.createElement("p");
+      summary.textContent = "执行 #" + entry.id + " · " + entry.workspace + " · " + entry.status;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "查看模拟会话";
+      button.addEventListener("click", () => {
+        openRun = entry;
+        renderSession(entry);
+        get("session").showModal();
+      });
+      row.append(summary, button);
+      return row;
+    }));
+  }
+
+  function renderSession(run) {
+    get("session-title").textContent = run.title;
+    get("session-input").textContent = run.instructions;
+    get("session-result").textContent = run.status === "执行中"
+      ? "模拟 Agent 正在执行。"
+      : "模拟 Agent 已返回结果。真实插件将在这里打开对应的 DSH 会话，查看回复、审批和产物。";
+  }
+
+  function selectTask(task) {
+    selected = task;
+    get("detail").hidden = !task;
+    get("no-selection").hidden = Boolean(task);
+    renderList();
+    if (!task) return;
+    get("task-title").textContent = task.title;
+    get("instructions").value = task.instructions;
+    get("workspace").value = task.workspace;
+    renderRuns();
+  }
+
+  for (const button of listButtons) {
+    button.addEventListener("click", () => {
+      list = button.dataset.list;
+      get("destination").value = list;
+      selectTask(tasks.find((task) => task.list === list));
+    });
+  }
+
+  get("instructions").addEventListener("input", (event) => { selected.instructions = event.target.value; });
+  get("workspace").addEventListener("change", (event) => { selected.workspace = event.target.value; });
+  get("create").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const title = get("title").value.trim();
+    if (!title) {
+      feedback("请输入任务标题。");
+      return;
+    }
+    list = get("destination").value;
+    const task = { title, list, instructions: "", workspace: "", runs: [] };
+    tasks.unshift(task);
+    get("title").value = "";
+    selectTask(task);
+    feedback("已添加到" + lists[list] + "。");
+    get("instructions").focus();
+  });
+  get("start").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!selected || get("start-button").disabled) return;
+    const instructions = selected.instructions.trim();
+    if (!selected.workspace) {
+      feedback("请选择执行工作区。");
+      get("workspace").focus();
+      return;
+    }
+    if (!instructions) {
+      feedback("请输入执行说明。");
+      get("instructions").focus();
+      return;
+    }
+    const run = {
+      id: nextRun++, title: selected.title, instructions, workspace: selected.workspace, status: "执行中",
+    };
+    selected.runs.unshift(run);
+    renderList();
+    renderRuns();
+    feedback("已启动模拟执行。");
+    setTimeout(() => {
+      run.status = "待验收";
+      renderList();
+      if (latest(selected) === run) {
+        renderRuns();
+        feedback("模拟执行已返回，打开会话查看结果。");
+      }
+      if (openRun === run && get("session").open) renderSession(run);
+    }, 1000);
+  });
+  get("accept").addEventListener("click", () => {
+    if (latest(selected)?.status !== "待验收") return;
+    selected.done = true;
+    renderList();
+    renderRuns();
+    feedback("任务已完成。");
+  });
+
+  selectTask(selected);
+</script>
+</html>
